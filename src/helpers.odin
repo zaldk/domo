@@ -20,43 +20,23 @@ button :: proc(aabb: rl.Rectangle) -> (state: int, action: bool) {
     return
 }
 
-//InputCharsPermitted :: enum{ALPHA, NUMERIC, ALPHANUMERIC}
-_IS_HOVERING_OVER_INPUTS := false
-input_numeric :: proc(aabb: rl.Rectangle) -> (state: int, content: int) {
-    state = 0       // 0=normal 1=hover
-    content = 9999
-
-    if rl.CheckCollisionPointRec(rl.GetMousePosition(), aabb) {
-        _IS_HOVERING_OVER_INPUTS = true
-        state = 1
-        char := int(rl.GetCharPressed())
-        if char >= 0x30 && char <= 0x39 {
-            content = char - 0x30
-        }
-        if rl.IsKeyPressed(.BACKSPACE) {
-            content = -1
-        }
-    } else { state = 0 }
-
-    return
-}
-
 draw_text :: proc(text: string, pos: [2]f32, color: rl.Color = {}, font_size: f32 = FONT_SIZE) {
     text_cstr := strings.clone_to_cstring(text)
     defer delete(text_cstr)
     rl.DrawTextEx(FONT, text_cstr, pos, font_size * SCALE, 0, color == {} ? TW(.NEUTRAL0) : color)
 }
 
-draw_text_center_axis :: proc(text: string, aabb: rl.Rectangle, axis: [2]f32, color: rl.Color = {}, font_size: f32 = FONT_SIZE) {
+// axis := { align_x = 0|1, align_y = 0|1 }
+draw_text_align :: proc(text: string, aabb: rl.Rectangle, axis: [2]f32, color: rl.Color = {}, font_size: f32 = FONT_SIZE) {
     text_sizes := measure_text(text, font_size)
-    draw_text(text, {aabb.x, aabb.y} + 0.5 * {
-        (aabb.width  - text_sizes[0]) * axis.x,
-        (aabb.height - text_sizes[1]) * axis.y,
+    draw_text(text, {aabb.x, aabb.y} + 0.5 * axis * {
+        (aabb.width  - text_sizes[0]),
+        (aabb.height - text_sizes[1]),
     }, color, font_size)
 }
 
 draw_text_center :: proc(text: string, aabb: rl.Rectangle, color: rl.Color = {}, font_size: f32 = FONT_SIZE) {
-    draw_text_center_axis(text, aabb, {1,1}, color, font_size)
+    draw_text_align(text, aabb, {1,1}, color, font_size)
 }
 
 draw_button :: proc(title: string, aabb: rl.Rectangle, bg, fg: rl.Color, border_width: f32) {
