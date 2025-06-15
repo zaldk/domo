@@ -1,6 +1,7 @@
 #!/usr/bin/env lua
 
-print("build.lua ftw")
+local name = "domo"
+print("build.lua for "..name)
 
 local function directory_exists(path)
     return os.execute("test -d " .. path)
@@ -52,7 +53,7 @@ print("Version: " .. version)
 
 run_command(table.concat({
     'odin run ./src',
-    '-out:'..build_dir..'/domo.'..version..'.dev',
+    '-out:'..build_dir..'/'..name..'.'..version..'.dev',
     '-collection:src=src',
     '-o:minimal',
     '-target:linux_amd64',

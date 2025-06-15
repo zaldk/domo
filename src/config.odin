@@ -4,17 +4,21 @@ import "core:os"
 import "core:log"
 import "core:encoding/json"
 
+Layout :: struct {
+    root: Node,
+}
 Node :: struct {
     type: string,
     value: f32,
-    tabs: union { []Node, []string },
+    tabs: []NodeTab,
 }
+NodeTab :: union { Node, string }
 
-parse :: proc() {
+parse :: proc() -> (Node, bool) {
     data, ok := os.read_entire_file_from_filename("./src/resources/layout.json5")
     if !ok {
         log.errorf("Failed to load the file.")
-        return
+        return {}, false
     }
     defer delete(data)
 
@@ -22,10 +26,10 @@ parse :: proc() {
     unmarshal_err := json.unmarshal(data, &root, allocator = context.temp_allocator)
     if unmarshal_err != nil {
         log.errorf("Failed to unmarshal the file.", unmarshal_err)
-        return
+        return {}, false
     }
-    log.infof("\n%#v\n", root)
     // delete_node(&root)
+    return root, true
 }
 
 // delete_node :: proc(root: ^Node) {

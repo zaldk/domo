@@ -8,10 +8,6 @@
     "enable_references": true,
     "enable_rename": true,
     "enable_inlay_hints": true,
-    "profile": "linux_profile",
-    "profiles": [
-        { "name": "default", "checker_path": ["src"]},
-        { "name": "linux_profile", "os": "linux", "checker_path": ["src"]},
-        { "name": "windows_profile", "os": "windows", "checker_path": ["src"]}
-    ]
+    "profile": "default",
+    "profiles": [ { "name": "default", "checker_path": ["src"]} ]
 }

@@ -47,46 +47,49 @@ main :: proc() {
     defer log.destroy_console_logger(context.logger)
     // }}}
 
-    parse()
-    // tokens := tokenize_layout(LAYOUT)
-    // defer delete(tokens)
-    // parse_layout(tokens[:])
+    // root, ok := parse()
+    // log.infof("\n%#v\n", root)
 
-    // {{{ Initial Variables
-    // rl.SetConfigFlags({ .WINDOW_RESIZABLE })
-    // rl.InitWindow(1600, 900, "FLOAT")
-    // defer rl.CloseWindow()
-    // rl.SetTargetFPS(TARGET_FPS * 2)
+    tabs := [?]NodeTab{"Foo", "Bar"}
+    layout := Layout {
+        root = Node {
+            type  = "v",
+            value = 50,
+            tabs  = tabs[:],
+        }
+    }
 
-    // scale_global(0)
-    // defer { for i in 0..<NUM_SCALES { if FONTS[i] != {} { rl.UnloadFont(FONTS[i]) } } }
-    // }}}
+    rl.SetConfigFlags({ .WINDOW_RESIZABLE })
+    rl.InitWindow(1600, 900, "FLOAT")
+    defer rl.CloseWindow()
+    rl.SetTargetFPS(TARGET_FPS * 2)
+    scale_global(0)
+    defer { for i in 0..<NUM_SCALES { if FONTS[i] != {} { rl.UnloadFont(FONTS[i]) } } }
 
-    // {{{ Game Loop
-    // for !(rl.WindowShouldClose() || DOMO_SHOULD_CLOSE) {
-    //     if rl.IsKeyPressed(.EQUAL) { scale_global(+1) }
-    //     if rl.IsKeyPressed(.MINUS) { scale_global(-1) }
-    //
-    //     rl.BeginDrawing()
-    //     rl.ClearBackground({0,0,0,255})
-    //
-    //     WIDTH := f32(rl.GetScreenWidth())
-    //     HEIGHT := f32(rl.GetScreenHeight())
-    //
-    //     tabbar_gap, tabbar_border : f32 = 8*SCALE, 3*SCALE
-    //     tabbar_aabb : rl.Rectangle = {0, 0, WIDTH, f32(FONT_SIZE*SCALE) + tabbar_gap*2}
-    //     sidebar_aabb : rl.Rectangle = {0, tabbar_aabb.height, 0, HEIGHT - tabbar_aabb.height}
-    //
-    //     switch {
-    //     case _IS_HOVERING_OVER_BUTTONS: rl.SetMouseCursor(.POINTING_HAND)
-    //     case: rl.SetMouseCursor(.DEFAULT)
-    //     }
-    //     _IS_HOVERING_OVER_BUTTONS = false
-    //
-    //     rl.DrawFPS(0, 0)
-    //     rl.EndDrawing()
-    //     defer free_all(context.temp_allocator)
-    // }
-    // }}}
+    for !(rl.WindowShouldClose() || DOMO_SHOULD_CLOSE) {
+        if rl.IsKeyPressed(.EQUAL) { scale_global(+1) }
+        if rl.IsKeyPressed(.MINUS) { scale_global(-1) }
+
+        rl.BeginDrawing()
+        rl.ClearBackground({0,0,0,255})
+
+        WIDTH := f32(rl.GetScreenWidth())
+        HEIGHT := f32(rl.GetScreenHeight())
+
+        tabbar_gap, tabbar_border : f32 = 8*SCALE, 3*SCALE
+        tabbar_aabb : rl.Rectangle = {0, 0, WIDTH, f32(FONT_SIZE*SCALE) + tabbar_gap*2}
+        sidebar_aabb : rl.Rectangle = {0, tabbar_aabb.height, 0, HEIGHT - tabbar_aabb.height}
+
+        switch {
+        case _IS_HOVERING_OVER_BUTTONS: rl.SetMouseCursor(.POINTING_HAND)
+        case: rl.SetMouseCursor(.DEFAULT)
+        }
+        _IS_HOVERING_OVER_BUTTONS = false
+
+        rl.DrawFPS(0, 0)
+        rl.EndDrawing()
+        defer free_all(context.temp_allocator)
+    }
+
     // }}}
 }
