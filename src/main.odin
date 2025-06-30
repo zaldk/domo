@@ -3,7 +3,9 @@ package main
 import "core:fmt"
 import "core:mem"
 import "core:log"
+import "core:strings"
 import rl "vendor:raylib"
+import "ui"
 
 DOMO_VERSION :: #config(DOMO_VERSION, "N/A")
 
@@ -24,8 +26,11 @@ THEME : Theme = .DARK
 TARGET_FPS :: 60
 DOMO_SHOULD_CLOSE := false
 
+window_renderer :: proc(title: string, width, height: f32) {
+    rl.DrawText(strings.unsafe_string_to_cstring(title), i32(width/2), i32(height/2), 48, rl.RAYWHITE)
+}
+
 main :: proc() {
-    // {{{
     // {{{ Tracking + Temp. Allocator
     // track my faulty programming
     // taken from youtube.com/watch?v=dg6qogN8kIE
@@ -47,17 +52,26 @@ main :: proc() {
     defer log.destroy_console_logger(context.logger)
     // }}}
 
-    // root, ok := parse()
-    // log.infof("\n%#v\n", root)
+    ui.init()
+    defer ui.destroy()
 
-    tabs := [?]NodeTab{"Foo", "Bar"}
-    layout := Layout {
-        root = Node {
-            type  = "v",
-            value = 50,
-            tabs  = tabs[:],
-        }
-    }
+    layout := ui.h(75,
+        left  = ui.v(75,
+            top    = "Source",
+            bottom = "Console",
+        ),
+        right = ui.v(50,
+            top    = ui.t("Breakpoints", "Commands", "Struct", "Exe"),
+            bottom = ui.t("Stack", "Files", "Registers", "Data", "Thread"),
+        )
+    )
+    defer ui.destroy_layout(&layout)
+    log.infof("\n%#v", layout)
+
+    windows := [?]string{"Source", "Console", "Breakpoints", "Commands", "Struct", "Exe", "Stack", "Files", "Registers", "Data", "Thread"}
+    for w in windows do ui.set_renderer(w, window_renderer)
+
+    if true do return
 
     rl.SetConfigFlags({ .WINDOW_RESIZABLE })
     rl.InitWindow(1600, 900, "FLOAT")
@@ -65,6 +79,7 @@ main :: proc() {
     rl.SetTargetFPS(TARGET_FPS * 2)
     scale_global(0)
     defer { for i in 0..<NUM_SCALES { if FONTS[i] != {} { rl.UnloadFont(FONTS[i]) } } }
+
 
     for !(rl.WindowShouldClose() || DOMO_SHOULD_CLOSE) {
         if rl.IsKeyPressed(.EQUAL) { scale_global(+1) }
@@ -90,6 +105,4 @@ main :: proc() {
         rl.EndDrawing()
         defer free_all(context.temp_allocator)
     }
-
-    // }}}
 }

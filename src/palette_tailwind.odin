@@ -28,7 +28,7 @@ TW_COLOR :: enum {
 	// }}}
 }
 
-TW_COLORS : [TW_COLOR]rl.Color : {
+TW_COLORS : [TW_COLOR]rl.Color = {
 	// {{{
 	// @SLATE
 	.SLATE0   = {0xF1, 0xF5, 0xF9, 0xFF}, // #F1F5F9
@@ -278,11 +278,10 @@ TW_COLORS : [TW_COLOR]rl.Color : {
 //Tw_Gray_Theme :: enum{NONE, SLATE, GRAY, ZINC, NEUTRAL, STONE}
 //TW_GRAY_THEME : Tw_Gray_Theme = NONE
 TW :: proc(color_code: TW_COLOR) -> rl.Color {
-	colors := TW_COLORS
 	result : rl.Color = {0xFF, 0x00, 0xFF, 0xFF}
 	switch THEME {
-	case .DARK: result = colors[color_code]
-	case .LIGHT: result = colors[cast(TW_COLOR)((cast(int)color_code/10)*10 + 10-1-cast(int)color_code%10)]
+	case .DARK: result = TW_COLORS[color_code]
+	case .LIGHT: result = TW_COLORS[cast(TW_COLOR)((cast(int)color_code/10)*10 + 10-1-cast(int)color_code%10)]
 	}
 	return result
 }

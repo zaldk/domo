@@ -12,7 +12,7 @@ local function file_exists(path)
 end
 
 local function run_command(cmd_str)
-    print("Executing: " .. cmd_str)
+    print("$ " .. cmd_str)
     local ok, _, code = os.execute(cmd_str)
     if not ok then
         io.stderr:write("Error: Command failed with exit code " .. tostring(code or 1) .. "\n")
