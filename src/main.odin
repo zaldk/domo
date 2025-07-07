@@ -107,7 +107,7 @@ main :: proc() {
         // }
         // _IS_HOVERING_OVER_BUTTONS = false
 
-        ctx := ui.init(100, 100, WIDTH-200, HEIGHT-200, 30)
+        ctx := ui.init(100, 100, WIDTH-200, HEIGHT-200, 24)
         defer ui.destroy(&ctx)
         // ui.render(&ctx,
         //     ui.t(&ctx,

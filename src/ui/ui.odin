@@ -38,10 +38,10 @@ DEFAULT_RENDERER :: proc(title: string, font_size: f32, x, y, w, h: i32) {
     th := i32(math.ceil(MEASURE_TEXT_HEIGHT(title, font_size)))
 
     DRAW_RECT({x,y,w,h}, {1,0,0,.25})
-    DRAW_RECT_LINES({x+1,y+1,w-1,h-1}, {1,0,0,1})
+    // DRAW_RECT_LINES({x+1,y+1,w-1,h-1}, {1,0,0,1})
 
     DRAW_RECT({x + w/2 - tw/2, y + h/2 - th/2, tw, th}, {0,1,0,.25})
-    DRAW_RECT_LINES({x + w/2 - tw/2 + 1, y + h/2 - th/2 + 1, tw-1, th-1}, {0,1,0,1})
+    // DRAW_RECT_LINES({x + w/2 - tw/2 + 1, y + h/2 - th/2 + 1, tw-1, th-1}, {0,1,0,1})
 
     DRAW_TEXT(title, {x + w/2 - tw/2, y + h/2 - th/2}, font_size, {1,1,1,1})
 }
@@ -166,12 +166,12 @@ render :: proc(ctx: ^Context, layout: Layout) {
                 ab := part_ctx.aabb
                 s := separator_girth
                 if l.type == .H {
-                    DRAW_RECT({ ab.x, ab.y-s, ab.w, s, }, {.3,.3,.3,1})
-                    DRAW_RECT_LINES({ ab.x+1, ab.y-s+1, ab.w-1, s-1, }, {1,1,1,1})
+                    DRAW_RECT({ ab.x, ab.y-s  , ab.w, s  , }, {0,0,0,1})
+                    DRAW_RECT({ ab.x, ab.y-s+1, ab.w, s-2, }, {.3,.3,.3,1})
                 }
                 if l.type == .V {
-                    DRAW_RECT({ ab.x-s, ab.y, s, ab.h, }, {.3,.3,.3,1})
-                    DRAW_RECT_LINES({ ab.x-s+1, ab.y+1, s-1, ab.h-1, }, {1,1,1,1})
+                    DRAW_RECT({ ab.x-s  , ab.y, s  , ab.h, }, {0,0,0,1})
+                    DRAW_RECT({ ab.x-s+1, ab.y, s-2, ab.h, }, {.3,.3,.3,1})
                 }
             }
         }
@@ -186,13 +186,17 @@ render :: proc(ctx: ^Context, layout: Layout) {
     tabbar_aabb := AABB{ctx.aabb.x, ctx.aabb.y, ctx.aabb.w, tabbar_height}
 
     DRAW_RECT({tabbar_aabb.x,tabbar_aabb.y,tabbar_aabb.w,tabbar_aabb.h}, {0,0,1,.25})
-    DRAW_RECT_LINES({tabbar_aabb.x,tabbar_aabb.y,tabbar_aabb.w,tabbar_aabb.h}, {0,0,1,1})
+    // DRAW_RECT_LINES({tabbar_aabb.x+1,tabbar_aabb.y+1,tabbar_aabb.w-1,tabbar_aabb.h-1}, {0,0,1,1})
     total_width : f32 = tabbar_font_size/2
     BEGIN_SCISSOR_MODE(tabbar_aabb.x,tabbar_aabb.y,tabbar_aabb.w,tabbar_aabb.h)
     for t in l.tabs {
-        DRAW_TEXT(t, { ctx.aabb.x + i32(total_width), ctx.aabb.y + tabbar_height-i32(tabbar_font_size) }, tabbar_font_size, {1,1,1,1})
         tw := MEASURE_TEXT_WIDTH(t, tabbar_font_size)
-        total_width += tw + tabbar_font_size
+        th := MEASURE_TEXT_HEIGHT(t, tabbar_font_size)
+        defer total_width += tw + tabbar_font_size
+        text_pos := [2]i32{ ctx.aabb.x + i32(total_width), ctx.aabb.y + tabbar_height-i32(tabbar_font_size) }
+        box_delta := i32(tabbar_font_size/4)
+        DRAW_RECT({text_pos.x-box_delta, text_pos.y, i32(tw)+box_delta*2, i32(th)}, {.3,.3,.3,1})
+        DRAW_TEXT(t, text_pos, tabbar_font_size, {1,1,1,1})
     }
     END_SCISSOR_MODE()
 
