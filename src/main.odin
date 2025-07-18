@@ -24,7 +24,7 @@ FONTS : [NUM_SCALES]rl.Font
 Theme :: enum{DARK=0, LIGHT}
 THEME : Theme = .DARK
 
-TARGET_FPS :: 60
+TARGET_FPS :: 144
 DOMO_SHOULD_CLOSE := false
 
 WIDTH  : i32 = 1000
@@ -57,8 +57,8 @@ main :: proc() {
     ui.init(&ctx, WIDTH, HEIGHT, "DEMO", FONT_SIZE)
     defer ui.destroy(&ctx)
 
-    ui.set_draw_rect(&ctx, proc(x,y,w,h: i32, r,g,b,a: f32) {
-        rl.DrawRectangle(x, y, w, w, rl.ColorFromNormalized({r,g,b,a}))
+    ui.set_draw_rect(&ctx, proc(aabb: [4]i32, color: [4]f32) {
+        rl.DrawRectangle(aabb.x, aabb.y, aabb.z, aabb.w, rl.ColorFromNormalized(color))
     })
     ui.set_draw_text(&ctx, proc(text: string, x,y: i32, font_size: f32, r,g,b,a: f32) {
         cstr := strings.clone_to_cstring(text)
@@ -84,15 +84,15 @@ main :: proc() {
     ui.set_begin_scissor_mode(&ctx, proc(x,y,w,h: i32) { rl.BeginScissorMode(x,y,w,h) })
     ui.set_end_scissor_mode(&ctx, proc() { rl.EndScissorMode() })
 
-    // for window_id in ([?]string{"A","B","C","D", "1","2","3","4","5"}) {
-    //     ui.set_renderer(&ctx, window_id, proc(ctx: ^ui.Context, id: string, x,y,w,h: i32, font_size: f32) {
-    //         ctx.draw_rect(x,y,w,h, 0,0,0,1)
-    //         ctx.draw_text(id, x+w/2, y+h/2, font_size, 1,1,1,1)
-    //     })
-    // }
+    for window_id in ([?]string{"A","B","C","D", "1","2","3","4","5"}) {
+        ui.set_renderer(&ctx, window_id, proc(ctx: ^ui.Context, id: string, x,y,w,h: i32, font_size: f32) {
+            ctx.draw_rect({x,y,w,h}, {.125,.125,.125,1})
+            ctx.draw_text(id, x+w/2, y+h/2, font_size, 1,1,1,1)
+        })
+    }
 
     layout : ui.Layout = ui.v(&ctx, .60,
-        ui.h(&ctx, .80,
+        ui.h(&ctx, .40,
             "A",
             ui.t(&ctx, "1", "2", "3", "4", "5"),
         ),
@@ -109,7 +109,7 @@ main :: proc() {
     rl.SetConfigFlags({ .WINDOW_RESIZABLE })
     rl.InitWindow(WIDTH, HEIGHT, "FLOAT")
     defer rl.CloseWindow()
-    rl.SetTargetFPS(TARGET_FPS * 2)
+    rl.SetTargetFPS(TARGET_FPS)
     scale_global(0)
     defer { for i in 0..<NUM_SCALES { if FONTS[i] != {} { rl.UnloadFont(FONTS[i]) } } }
 

@@ -7,9 +7,9 @@ import rl "vendor:raylib"
 
 SplitID :: distinct i32
 
-// H is a Horizontal line
-// V is a Vertical line
-// T is Tabs
+// H => top, bottom
+// V => left, right
+// T => [..tabs]
 LayoutType :: enum { H, V, T }
 Part :: union { Layout, string }
 Layout :: struct {
@@ -45,11 +45,11 @@ DEFAULT_RENDERER :: proc(ctx: ^Context, title: string, x,y,w,h: i32, font_size: 
     tw := i32(math.ceil(ctx.measure_text_width(title, font_size)))
     th := i32(math.ceil(ctx.measure_text_height(title, font_size)))
 
-    ctx.draw_rect(x,y,w,h, 1,0,0,.25)
-    // ctx.draw_rect_lines(x+1,y+1,w-1,h-1, 1,0,0,1)
+    ctx.draw_rect({x,y,w,h}, {1,0,0,.25})
+    // ctx.draw_rect_lines({x+1,y+1,w-1,h-1}, {1,0,0,1})
 
-    ctx.draw_rect(x + w/2 - tw/2, y + h/2 - th/2, tw, th, 0,1,0,.25)
-    // ctx.draw_rect_lines(x + w/2 - tw/2 + 1, y + h/2 - th/2 + 1, tw-1, th-1, 0,1,0,1)
+    ctx.draw_rect({x + w/2 - tw/2, y + h/2 - th/2, tw, th}, {0,1,0,.25})
+    // ctx.draw_rect_lines({x + w/2 - tw/2 + 1, y + h/2 - th/2 + 1, tw-1, th-1}, {0,1,0,1})
 
     ctx.draw_text(title, x + w/2 - tw/2, y + h/2 - th/2, font_size, 1,1,1,1)
 }
@@ -57,7 +57,7 @@ set_renderer :: proc(ctx: ^Context, title: string, renderer: WindowRenderer) {
     ctx.renderers[title] = renderer
 }
 
-DrawRect :: #type proc(x,y,w,h: i32, r,g,b,a: f32)
+DrawRect :: #type proc(aabb: [4]i32, color: [4]f32)
 set_draw_rect :: proc(ctx: ^Context, fn: DrawRect) { ctx.draw_rect = fn }
 
 DrawText :: #type proc(text: string, x,y: i32, font_size: f32, r,g,b,a: f32)
@@ -145,8 +145,8 @@ render :: proc(ctx: ^Context, layout: Layout) {
                     part_ctx.h = i32(f32(part_ctx.h) * l.split)
                 }
                 if i == 1 { // bottom
-                    part_ctx.y+= i32(f32(part_ctx.h) * l.split)
-                    part_ctx.h = i32(f32(part_ctx.h) * (1-l.split))
+                    part_ctx.y += i32(f32(part_ctx.h) * l.split)
+                    part_ctx.h  = i32(f32(part_ctx.h) * (1-l.split))
                     part_ctx.y += separator_girth/2
                 }
                 part_ctx.h -= separator_girth/2
@@ -156,8 +156,8 @@ render :: proc(ctx: ^Context, layout: Layout) {
                     part_ctx.w = i32(f32(part_ctx.w) * l.split)
                 }
                 if i == 1 { // right
-                    part_ctx.x+= i32(f32(part_ctx.w) * l.split)
-                    part_ctx.w = i32(f32(part_ctx.w) * (1-l.split))
+                    part_ctx.x += i32(f32(part_ctx.w) * l.split)
+                    part_ctx.w  = i32(f32(part_ctx.w) * (1-l.split))
                     part_ctx.x += separator_girth/2
                 }
                 part_ctx.w -= separator_girth/2
@@ -176,36 +176,36 @@ render :: proc(ctx: ^Context, layout: Layout) {
                 ab := [?]i32{part_ctx.x, part_ctx.y, part_ctx.w, part_ctx.h}
                 s := separator_girth
                 if l.type == .H {
-                    ctx.draw_rect(ab.x, ab.y-s  , ab.z, s  , 0,0,0,1)
-                    ctx.draw_rect(ab.x, ab.y-s+1, ab.z, s-2, .3,.3,.3,1)
+                    ctx.draw_rect({ab.x, ab.y-s  , ab.z, s  }, {0,0,0,1})
+                    ctx.draw_rect({ab.x, ab.y-s+1, ab.z, s-2}, {.3,.3,.3,1})
                 }
                 if l.type == .V {
-                    ctx.draw_rect(ab.x-s  , ab.y, s  , ab.w, 0,0,0,1)
-                    ctx.draw_rect(ab.x-s+1, ab.y, s-2, ab.w, .3,.3,.3,1)
+                    ctx.draw_rect({ab.x-s  , ab.y, s  , ab.w}, {0,0,0,1})
+                    ctx.draw_rect({ab.x-s+1, ab.y, s-2, ab.w}, {.3,.3,.3,1})
                 }
             }
         }
         return
-    }
+    } // else: l.type == .T
 
-    // l.type == .T
     if len(l.parts) == 0 do return
 
     tabbar_font_size := f32(18)
     tabbar_height := i32(tabbar_font_size * 1.25)
     tabbar := [?]i32{ ctx.x, ctx.y, ctx.w, tabbar_height }
 
-    ctx.draw_rect(tabbar.x,tabbar.y,tabbar.z,tabbar.w, 0,0,1,.25)
+    ctx.draw_rect({tabbar.x,tabbar.y,tabbar.z,tabbar.w}, {0,0,0,.25})
     // ctx.draw_rect_lines(tabbar.x+1,tabbar.y+1,tabbar_width-1,tabbar_height-1, 0,0,1,1)
     total_width : f32 = tabbar_font_size/2
+    space_width := ctx.measure_text_width(" ", tabbar_font_size)
     ctx.begin_scissor_mode(tabbar.x,tabbar.y,tabbar.z,tabbar_height)
     for t in l.parts {
         tw := ctx.measure_text_width(t.(string), tabbar_font_size)
         th := ctx.measure_text_height(t.(string), tabbar_font_size)
-        defer total_width += tw + tabbar_font_size
+        defer total_width += tw + tabbar_font_size/2
         text_pos := [2]i32{ ctx.x + i32(total_width), ctx.y + tabbar_height-i32(tabbar_font_size) }
         box_delta := i32(tabbar_font_size/4)
-        ctx.draw_rect(text_pos.x-box_delta, text_pos.y, i32(tw)+box_delta*2, i32(th), .3,.3,.3,1)
+        ctx.draw_rect({text_pos.x-box_delta, text_pos.y, i32(tw)+box_delta*2, i32(th)}, {0,.3,.3,1})
         ctx.draw_text(t.(string), text_pos.x, text_pos.y, tabbar_font_size, 1,1,1,1)
     }
     ctx.end_scissor_mode()
