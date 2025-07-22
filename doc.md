@@ -7,9 +7,8 @@ h(75, v(75, Source, Console), v(50, t(Breakpoints, Commands, Struct, Exe), t(Sta
 
 ```odin
 main :: proc() {
-    ctx: ui.Context
-    ui.init(&ctx, width, height, title, font_size, allocator)
-    defer ui.delete(&ctx)
+    ui.init(width, height, title, font_size, allocator)
+    defer ui.free(&ctx)
 
     ui.set_draw_rect(&ctx, proc(x,y,w,h: i32, r,g,b,a: f32) {})
     ui.set_draw_text(&ctx, proc(text: string, x,y: i32, font_size: f32, r,g,b,a: f32) {})

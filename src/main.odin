@@ -53,58 +53,56 @@ main :: proc() {
 
 
 
-    ctx: ui.Context
-    ui.init(&ctx, WIDTH, HEIGHT, "DEMO", FONT_SIZE)
-    defer ui.destroy(&ctx)
+    ui.init(WIDTH, HEIGHT, "DEMO", FONT_SIZE, context.temp_allocator)
 
-    ui.set_draw_rect(&ctx, proc(aabb: [4]i32, color: [4]f32) {
-        rl.DrawRectangle(aabb.x, aabb.y, aabb.z, aabb.w, rl.ColorFromNormalized(color))
-    })
-    ui.set_draw_text(&ctx, proc(text: string, x,y: i32, font_size: f32, r,g,b,a: f32) {
-        cstr := strings.clone_to_cstring(text)
-        defer delete(cstr)
-        rl.DrawTextEx(FONT, cstr, {f32(x), f32(y)}, font_size, font_size/10, rl.ColorFromNormalized({r,g,b,a}))
-    })
-    ui.set_get_mouse_x(&ctx, proc() -> i32 { return rl.GetMouseX() })
-    ui.set_get_mouse_y(&ctx, proc() -> i32 { return rl.GetMouseY() })
-    ui.set_get_mouse_wheel_move_x(&ctx, proc() -> f32 { return rl.GetMouseWheelMoveV().x })
-    ui.set_get_mouse_wheel_move_y(&ctx, proc() -> f32 { return rl.GetMouseWheelMoveV().y })
-    ui.set_is_mouse_button_down(&ctx, proc(button: i32) -> bool { return rl.IsMouseButtonDown(rl.MouseButton(button)) })
-    ui.set_is_mouse_button_pressed(&ctx, proc(button: i32) -> bool { return rl.IsMouseButtonPressed(rl.MouseButton(button)) })
-    ui.set_measure_text_width(&ctx, proc(text: string, size: f32) -> f32 {
-        cstr := strings.clone_to_cstring(text)
-        defer delete(cstr)
-        return rl.MeasureTextEx(FONT, cstr, size, size/10).x
-    })
-    ui.set_measure_text_height(&ctx, proc(text: string, size: f32) -> f32 {
-        cstr := strings.clone_to_cstring(text)
-        defer delete(cstr)
-        return rl.MeasureTextEx(FONT, cstr, size, size/10).y
-    })
-    ui.set_begin_scissor_mode(&ctx, proc(x,y,w,h: i32) { rl.BeginScissorMode(x,y,w,h) })
-    ui.set_end_scissor_mode(&ctx, proc() { rl.EndScissorMode() })
+    // ui.set_draw_rect(&ctx, proc(aabb: [4]i32, color: [4]f32) {
+    //     rl.DrawRectangle(aabb.x, aabb.y, aabb.z, aabb.w, rl.ColorFromNormalized(color))
+    // })
+    // ui.set_draw_text(&ctx, proc(text: string, x,y: i32, font_size: f32, r,g,b,a: f32) {
+    //     cstr := strings.clone_to_cstring(text)
+    //     defer delete(cstr)
+    //     rl.DrawTextEx(FONT, cstr, {f32(x), f32(y)}, font_size, font_size/10, rl.ColorFromNormalized({r,g,b,a}))
+    // })
+    // ui.set_get_mouse_x(&ctx, proc() -> i32 { return rl.GetMouseX() })
+    // ui.set_get_mouse_y(&ctx, proc() -> i32 { return rl.GetMouseY() })
+    // ui.set_get_mouse_wheel_move_x(&ctx, proc() -> f32 { return rl.GetMouseWheelMoveV().x })
+    // ui.set_get_mouse_wheel_move_y(&ctx, proc() -> f32 { return rl.GetMouseWheelMoveV().y })
+    // ui.set_is_mouse_button_down(&ctx, proc(button: i32) -> bool { return rl.IsMouseButtonDown(rl.MouseButton(button)) })
+    // ui.set_is_mouse_button_pressed(&ctx, proc(button: i32) -> bool { return rl.IsMouseButtonPressed(rl.MouseButton(button)) })
+    // ui.set_measure_text_width(&ctx, proc(text: string, size: f32) -> f32 {
+    //     cstr := strings.clone_to_cstring(text)
+    //     defer delete(cstr)
+    //     return rl.MeasureTextEx(FONT, cstr, size, size/10).x
+    // })
+    // ui.set_measure_text_height(&ctx, proc(text: string, size: f32) -> f32 {
+    //     cstr := strings.clone_to_cstring(text)
+    //     defer delete(cstr)
+    //     return rl.MeasureTextEx(FONT, cstr, size, size/10).y
+    // })
+    // ui.set_begin_scissor_mode(&ctx, proc(x,y,w,h: i32) { rl.BeginScissorMode(x,y,w,h) })
+    // ui.set_end_scissor_mode(&ctx, proc() { rl.EndScissorMode() })
 
-    for window_id in ([?]string{"A","B","C","D", "1","2","3","4","5"}) {
-        ui.set_renderer(&ctx, window_id, proc(ctx: ^ui.Context, id: string, x,y,w,h: i32, font_size: f32) {
-            ctx.draw_rect({x,y,w,h}, {.125,.125,.125,1})
-            ctx.draw_text(id, x+w/2, y+h/2, font_size, 1,1,1,1)
-        })
-    }
+    // for window_id in ([?]string{"A","B","C","D", "1","2","3","4","5"}) {
+    //     ui.set_renderer(&ctx, window_id, proc(ctx: ^ui.Context, id: string, x,y,w,h: i32, font_size: f32) {
+    //         ctx.draw_rect({x,y,w,h}, {.125,.125,.125,1})
+    //         ctx.draw_text(id, x+w/2, y+h/2, font_size, 1,1,1,1)
+    //     })
+    // }
 
-    layout : ui.Layout = ui.v(&ctx, .60,
-        ui.h(&ctx, .40,
+    layout : ui.Layout = ui.v(0.6,
+        ui.h(0.4,
             "A",
-            ui.t(&ctx, "1", "2", "3", "4", "5"),
+            ui.t("1", "2", "3", "4", "5"),
         ),
-        ui.h(&ctx, .75,
-            ui.h(&ctx, .50, "B", "C"),
+        ui.h(0.75,
+            ui.h(0.5, "B", "C"),
             "D",
         ),
     )
     defer ui.destroy_layout(&layout)
     fmt.printf("\n%#v\n", layout)
 
-
+    if true do return
 
     rl.SetConfigFlags({ .WINDOW_RESIZABLE })
     rl.InitWindow(WIDTH, HEIGHT, "FLOAT")
@@ -123,28 +121,8 @@ main :: proc() {
         WIDTH  = rl.GetScreenWidth()
         HEIGHT = rl.GetScreenHeight()
 
-        // tabbar_gap, tabbar_border : f32 = 8*SCALE, 3*SCALE
-        // tabbar_aabb : rl.Rectangle = {0, 0, WIDTH, f32(FONT_SIZE*SCALE) + tabbar_gap*2}
-        // sidebar_aabb : rl.Rectangle = {0, tabbar_aabb.height, 0, HEIGHT - tabbar_aabb.height}
-
-        // switch {
-        // case _IS_HOVERING_OVER_BUTTONS: rl.SetMouseCursor(.POINTING_HAND)
-        // case: rl.SetMouseCursor(.DEFAULT)
-        // }
-        // _IS_HOVERING_OVER_BUTTONS = false
-
         // ui.update(&ctx, &layout)
-        ui.render(&ctx, layout)
-        // ui.render(&ctx,
-        //     ui.t(&ctx,
-        //         "AAA",
-        //         "BBB",
-        //         "CCC",
-        //         "DDD",
-        //         "EEE",
-        //         "FFF",
-        //     )
-        // )
+        // ui.render(&ctx, layout)
         // ui.render(&ctx,
         //     ui.h(&ctx, .75,
         //         ui.v(&ctx, .75,
