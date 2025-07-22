@@ -54,45 +54,13 @@ main :: proc() {
 
 
     ui.init(WIDTH, HEIGHT, "DEMO", FONT_SIZE, context.temp_allocator)
-
-    // ui.set_draw_rect(&ctx, proc(aabb: [4]i32, color: [4]f32) {
-    //     rl.DrawRectangle(aabb.x, aabb.y, aabb.z, aabb.w, rl.ColorFromNormalized(color))
-    // })
-    // ui.set_draw_text(&ctx, proc(text: string, x,y: i32, font_size: f32, r,g,b,a: f32) {
-    //     cstr := strings.clone_to_cstring(text)
-    //     defer delete(cstr)
-    //     rl.DrawTextEx(FONT, cstr, {f32(x), f32(y)}, font_size, font_size/10, rl.ColorFromNormalized({r,g,b,a}))
-    // })
-    // ui.set_get_mouse_x(&ctx, proc() -> i32 { return rl.GetMouseX() })
-    // ui.set_get_mouse_y(&ctx, proc() -> i32 { return rl.GetMouseY() })
-    // ui.set_get_mouse_wheel_move_x(&ctx, proc() -> f32 { return rl.GetMouseWheelMoveV().x })
-    // ui.set_get_mouse_wheel_move_y(&ctx, proc() -> f32 { return rl.GetMouseWheelMoveV().y })
-    // ui.set_is_mouse_button_down(&ctx, proc(button: i32) -> bool { return rl.IsMouseButtonDown(rl.MouseButton(button)) })
-    // ui.set_is_mouse_button_pressed(&ctx, proc(button: i32) -> bool { return rl.IsMouseButtonPressed(rl.MouseButton(button)) })
-    // ui.set_measure_text_width(&ctx, proc(text: string, size: f32) -> f32 {
-    //     cstr := strings.clone_to_cstring(text)
-    //     defer delete(cstr)
-    //     return rl.MeasureTextEx(FONT, cstr, size, size/10).x
-    // })
-    // ui.set_measure_text_height(&ctx, proc(text: string, size: f32) -> f32 {
-    //     cstr := strings.clone_to_cstring(text)
-    //     defer delete(cstr)
-    //     return rl.MeasureTextEx(FONT, cstr, size, size/10).y
-    // })
-    // ui.set_begin_scissor_mode(&ctx, proc(x,y,w,h: i32) { rl.BeginScissorMode(x,y,w,h) })
-    // ui.set_end_scissor_mode(&ctx, proc() { rl.EndScissorMode() })
-
-    // for window_id in ([?]string{"A","B","C","D", "1","2","3","4","5"}) {
-    //     ui.set_renderer(&ctx, window_id, proc(ctx: ^ui.Context, id: string, x,y,w,h: i32, font_size: f32) {
-    //         ctx.draw_rect({x,y,w,h}, {.125,.125,.125,1})
-    //         ctx.draw_text(id, x+w/2, y+h/2, font_size, 1,1,1,1)
-    //     })
-    // }
-
     layout : ui.Layout = ui.v(0.6,
         ui.h(0.4,
             "A",
-            ui.t("1", "2", "3", "4", "5"),
+            ui.t("1", "2", ui.v(0.5, 
+                "PI",
+                ui.t("E", "PHI")
+            ), "4", "5"),
         ),
         ui.h(0.75,
             ui.h(0.5, "B", "C"),
@@ -101,6 +69,9 @@ main :: proc() {
     )
     defer ui.destroy_layout(&layout)
     fmt.printf("\n%#v\n", layout)
+
+    ui.render(layout)
+    fmt.println(ui.CTX.commands)
 
     if true do return
 
@@ -123,27 +94,9 @@ main :: proc() {
 
         // ui.update(&ctx, &layout)
         // ui.render(&ctx, layout)
-        // ui.render(&ctx,
-        //     ui.h(&ctx, .75,
-        //         ui.v(&ctx, .75,
-        //             "Source",
-        //             "Console",
-        //         ),
-        //         ui.v(&ctx, .50,
-        //             ui.t(&ctx, "Breakpoints", "Commands", "Struct", "Exe"),
-        //             ui.t(&ctx, "Stack", "Files", "Registers", "Data", "Thread"),
-        //         )
-        //     )
-        // )
 
-        // rl.DrawTextEx(FONT, strings.clone_to_cstring(fmt.tprintf("%v/%v", WIDTH, HEIGHT), context.temp_allocator), {0, 20}, 48, 0, rl.RAYWHITE)
         rl.DrawFPS(0, 0)
         rl.EndDrawing()
         defer free_all(context.temp_allocator)
-        // break
     }
 }
-
-// window_renderer :: proc(title: string, width, height: int) {
-//     rl.DrawText(strings.unsafe_string_to_cstring(title), i32(width/2), i32(height/2), 48, rl.RAYWHITE)
-// }

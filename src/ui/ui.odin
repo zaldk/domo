@@ -5,7 +5,9 @@ import "core:math"
 import "core:mem"
 import rl "vendor:raylib"
 
-SplitID :: distinct i32
+Box :: struct {
+    x, y, w, h: i32
+}
 
 // H => top, bottom
 // V => left, right
@@ -21,11 +23,11 @@ Layout :: struct {
 
 CTX : Context
 Context :: struct {
-    x, y, w, h: i32,
+    box: Box,
     font_size: f32,
     title: string,
     allocator: mem.Allocator,
-    commands: [1024]Command,
+    commands: [dynamic]Command,
 }
 
 Command :: struct {
@@ -33,17 +35,20 @@ Command :: struct {
     input: CommandInput,
 }
 CommandType :: enum {
+    RENDER,
     DRAW_RECT,
     DRAW_TEXT,
     BEGIN_SCISSOR_MODE,
     END_SCISSOR_MODE,
 }
 CommandInput :: union {
+    Render,
     DrawRect,
     DrawText,
     BeginScissorMode,
     EndScissorMode,
 }
+Render :: struct { title: string, x,y,w,h: i32, font_size: f32 }
 DrawRect :: struct { aabb: [4]i32, color: [4]f32 }
 DrawText :: struct { text: string, pos: [2]i32, font_size: f32, color: [4]f32 }
 BeginScissorMode :: struct { x, y, w, h: i32 }
@@ -61,11 +66,11 @@ IsMouseButtonDown :: #type proc(button: i32) -> bool
 IsMouseButtonPressed :: #type proc(button: i32) -> bool
 
 init :: proc(width, height: i32, title: string, font_size: f32, allocator := context.allocator) {
-    CTX.w = width
-    CTX.h = height
+    CTX.box = {0, 0, width, height}
     CTX.font_size = font_size
     CTX.title = title
     CTX.allocator = allocator
+    CTX.commands = make([dynamic]Command, allocator)
 }
 
 destroy_layout :: proc(layout: ^Layout) {
@@ -74,7 +79,6 @@ destroy_layout :: proc(layout: ^Layout) {
             destroy_layout(&p)
         }
     }
-    // delete(layout.parts)
 }
 
 layout :: proc(ctx: ^Context, type: LayoutType, parts: ..Part, split := f32(0), active_tab := 0) -> Layout {
@@ -87,50 +91,77 @@ v :: proc(split: f32, left, right: Part) -> Layout { return layout(&CTX, .V, lef
 t :: proc(tabs: ..Part, active_tab := 0) -> Layout { return layout(&CTX, .T, ..tabs, active_tab=active_tab) }
 
 render :: proc(layout: Layout) {
+
+    queue := make([dynamic]Layout, CTX.allocator)
+    append(&queue, layout)
+
+    for len(queue) > 0 {
+        l := pop_front(&queue)
+        switch l.type {
+        case .H, .V:
+            if len(l.parts) != 2 do return
+        case .T:
+        }
+    }
+
     _render(&CTX, layout)
     _render :: proc(ctx: ^Context, l: Layout) {
         separator_girth := i32(8)
-        if l.type == .H || l.type == .V {
+        switch l.type {
+        case .H, .V:
             if len(l.parts) != 2 do return
-            for t, i in l.parts {
+            for part, i in l.parts {
                 part_ctx := ctx^
                 if l.type == .H {
                     if i == 0 { // top
-                        part_ctx.h = i32(f32(part_ctx.h) * l.split)
+                        part_ctx.box.h = i32(f32(part_ctx.box.h) * l.split)
                     }
                     if i == 1 { // bottom
-                        part_ctx.y += i32(f32(part_ctx.h) * l.split)
-                        part_ctx.h  = i32(f32(part_ctx.h) * (1-l.split))
-                        part_ctx.y += separator_girth/2
+                        part_ctx.box.y += i32(f32(part_ctx.box.h) * l.split)
+                        part_ctx.box.h  = i32(f32(part_ctx.box.h) * (1-l.split))
+                        part_ctx.box.y += separator_girth/2
                     }
-                    part_ctx.h -= separator_girth/2
-                }
-                if l.type == .V {
+                    part_ctx.box.h -= separator_girth/2
+                } else if l.type == .V {
                     if i == 0 { // left
-                        part_ctx.w = i32(f32(part_ctx.w) * l.split)
+                        part_ctx.box.w = i32(f32(part_ctx.box.w) * l.split)
                     }
                     if i == 1 { // right
-                        part_ctx.x += i32(f32(part_ctx.w) * l.split)
-                        part_ctx.w  = i32(f32(part_ctx.w) * (1-l.split))
-                        part_ctx.x += separator_girth/2
+                        part_ctx.box.x += i32(f32(part_ctx.box.w) * l.split)
+                        part_ctx.box.w  = i32(f32(part_ctx.box.w) * (1-l.split))
+                        part_ctx.box.x += separator_girth/2
                     }
-                    part_ctx.w -= separator_girth/2
+                    part_ctx.box.w -= separator_girth/2
                 }
 
-                switch t in l.parts[i] {
-                case Layout: _render(&part_ctx, t)
-                case string:
-                    log.infof("RENDER (%v)", t)
-                    // _renderer, ok := part_ctx._renderers[t]
-                    // if !ok do _renderer = DEFAULT__renderER
-                    // ctx.begin_scissor_mode(part_ctx.x, part_ctx.y, part_ctx.w, part_ctx.h)
-                    // renderer(&part_ctx, t, part_ctx.x, part_ctx.y, part_ctx.w, part_ctx.h, part_ctx.font_size)
-                    // ctx.end_scissor_mode()
+                switch p in part {
+                case Layout: _render(&part_ctx, p)
+                case string: append(&ctx.commands, Command{
+                    type = .RENDER,
+                    input = Render{
+                        title=p,
+                        x=ctx.box.x, y=ctx.box.y, w=ctx.box.w, h=ctx.box.h,
+                        font_size=ctx.font_size,
+                    },
+                })
                 }
             }
             return
-        } else {
-            log.infof("RENDER (%v of %v)", l.parts[l.active], l.parts)
+        case .T:
+            for part, i in l.parts {
+                part_ctx := ctx^
+                switch p in part {
+                case Layout: _render(&part_ctx, p)
+                case string: append(&ctx.commands, Command{
+                    type = .RENDER,
+                    input = Render{
+                        title=p,
+                        x=ctx.box.x, y=ctx.box.y, w=ctx.box.w, h=ctx.box.h,
+                        font_size=ctx.font_size,
+                    },
+                })
+                }
+            }
         }
     }
 }
