@@ -26,6 +26,7 @@ main :: proc() {
         fmt.tprintf("-out:%v.%v.dev", filepath.join({BUILD_DIR, NAME}) or_else "", version),
         "-collection:src=src",
         "-o:minimal",
+        "-debug",
         "-target:linux_amd64",
         fmt.tprintf("-define:%v_VERSION=%v", NAME, version),
     }
