@@ -48,6 +48,14 @@ main :: proc() {
 
     ctx := ui.init_context()
     defer ui.free_context(ctx)
+    ui.set_draw_rect(proc(x,y,w,h: i32, color: [4]u8) {
+        rl.DrawRectangle(x,y,w,h, rl.Color(color))
+    })
+    ui.set_draw_text(proc(text: string, x,y: i32, font_size: f32, color: [4]u8) {
+        cstr := strings.clone_to_cstring(text)
+        defer delete(cstr)
+        rl.DrawText(cstr, x,y, i32(font_size), rl.Color(color))
+    })
     ui.set_layout(
         ui.h(.75,
             ui.v(.75,
@@ -57,9 +65,6 @@ main :: proc() {
                 ui.t(Breakpoints, Commands, Struct, Exe),
                 ui.t(Stack, Files, Registers, Data, Thread))))
 
-    // ui.render(WIDTH, HEIGHT, FONT_SIZE)
-    //
-    // if true do return
 
 
     rl.SetConfigFlags({ .WINDOW_RESIZABLE })
@@ -88,14 +93,80 @@ main :: proc() {
     }
 }
 
-Source      :: proc(x,y,w,h: i32) { rl.DrawRectangle(x,y,w,h, {50,50,50,255}); rl.DrawText("Source",      x+w/2, y+h/2, i32(FONT_SIZE), {200,200,200,255}) }
-Console     :: proc(x,y,w,h: i32) { rl.DrawRectangle(x,y,w,h, {50,50,50,255}); rl.DrawText("Console",     x+w/2, y+h/2, i32(FONT_SIZE), {200,200,200,255}) }
-Breakpoints :: proc(x,y,w,h: i32) { rl.DrawRectangle(x,y,w,h, {50,50,50,255}); rl.DrawText("Breakpoints", x+w/2, y+h/2, i32(FONT_SIZE), {200,200,200,255}) }
-Commands    :: proc(x,y,w,h: i32) { rl.DrawRectangle(x,y,w,h, {50,50,50,255}); rl.DrawText("Commands",    x+w/2, y+h/2, i32(FONT_SIZE), {200,200,200,255}) }
-Struct      :: proc(x,y,w,h: i32) { rl.DrawRectangle(x,y,w,h, {50,50,50,255}); rl.DrawText("Struct",      x+w/2, y+h/2, i32(FONT_SIZE), {200,200,200,255}) }
-Exe         :: proc(x,y,w,h: i32) { rl.DrawRectangle(x,y,w,h, {50,50,50,255}); rl.DrawText("Exe",         x+w/2, y+h/2, i32(FONT_SIZE), {200,200,200,255}) }
-Stack       :: proc(x,y,w,h: i32) { rl.DrawRectangle(x,y,w,h, {50,50,50,255}); rl.DrawText("Stack",       x+w/2, y+h/2, i32(FONT_SIZE), {200,200,200,255}) }
-Files       :: proc(x,y,w,h: i32) { rl.DrawRectangle(x,y,w,h, {50,50,50,255}); rl.DrawText("Files",       x+w/2, y+h/2, i32(FONT_SIZE), {200,200,200,255}) }
-Registers   :: proc(x,y,w,h: i32) { rl.DrawRectangle(x,y,w,h, {50,50,50,255}); rl.DrawText("Registers",   x+w/2, y+h/2, i32(FONT_SIZE), {200,200,200,255}) }
-Data        :: proc(x,y,w,h: i32) { rl.DrawRectangle(x,y,w,h, {50,50,50,255}); rl.DrawText("Data",        x+w/2, y+h/2, i32(FONT_SIZE), {200,200,200,255}) }
-Thread      :: proc(x,y,w,h: i32) { rl.DrawRectangle(x,y,w,h, {50,50,50,255}); rl.DrawText("Thread",      x+w/2, y+h/2, i32(FONT_SIZE), {200,200,200,255}) }
+Source :: ui.Renderer{
+    title = "Source",
+    fn = proc(x,y,w,h: i32) {
+        rl.DrawRectangle(x,y,w,h, { 50,50,50,255 })
+        rl.DrawText("Source", x+w/2, y+h/2, i32(FONT_SIZE), { 200,200,200,255 })
+    }
+}
+Console :: ui.Renderer{
+    title = "Console",
+    fn = proc(x,y,w,h: i32) {
+        rl.DrawRectangle(x,y,w,h, { 50,50,50,255 })
+        rl.DrawText("Console", x+w/2, y+h/2, i32(FONT_SIZE), { 200,200,200,255 })
+    }
+}
+Breakpoints :: ui.Renderer{
+    title = "Breakpoints",
+    fn = proc(x,y,w,h: i32) {
+        rl.DrawRectangle(x,y,w,h, { 50,50,50,255 })
+        rl.DrawText("Breakpoints", x+w/2, y+h/2, i32(FONT_SIZE), { 200,200,200,255 })
+    }
+}
+Commands :: ui.Renderer{
+    title = "Commands",
+    fn = proc(x,y,w,h: i32) {
+        rl.DrawRectangle(x,y,w,h, { 50,50,50,255 })
+        rl.DrawText("Commands", x+w/2, y+h/2, i32(FONT_SIZE), { 200,200,200,255 })
+    }
+}
+Struct :: ui.Renderer{
+    title = "Struct",
+    fn = proc(x,y,w,h: i32) {
+        rl.DrawRectangle(x,y,w,h, { 50,50,50,255 })
+        rl.DrawText("Struct", x+w/2, y+h/2, i32(FONT_SIZE), { 200,200,200,255 })
+    }
+}
+Exe :: ui.Renderer{
+    title = "Exe",
+    fn = proc(x,y,w,h: i32) {
+        rl.DrawRectangle(x,y,w,h, { 50,50,50,255 })
+        rl.DrawText("Exe", x+w/2, y+h/2, i32(FONT_SIZE), { 200,200,200,255 })
+    }
+}
+Stack :: ui.Renderer{
+    title = "Stack",
+    fn = proc(x,y,w,h: i32) {
+        rl.DrawRectangle(x,y,w,h, { 50,50,50,255 })
+        rl.DrawText("Stack", x+w/2, y+h/2, i32(FONT_SIZE), { 200,200,200,255 })
+    }
+}
+Files :: ui.Renderer{
+    title = "Files",
+    fn = proc(x,y,w,h: i32) {
+        rl.DrawRectangle(x,y,w,h, { 50,50,50,255 })
+        rl.DrawText("Files", x+w/2, y+h/2, i32(FONT_SIZE), { 200,200,200,255 })
+    }
+}
+Registers :: ui.Renderer{
+    title = "Registers",
+    fn = proc(x,y,w,h: i32) {
+        rl.DrawRectangle(x,y,w,h, { 50,50,50,255 })
+        rl.DrawText("Registers", x+w/2, y+h/2, i32(FONT_SIZE), { 200,200,200,255 })
+    }
+}
+Data :: ui.Renderer{
+    title = "Data",
+    fn = proc(x,y,w,h: i32) {
+        rl.DrawRectangle(x,y,w,h, { 50,50,50,255 })
+        rl.DrawText("Data", x+w/2, y+h/2, i32(FONT_SIZE), { 200,200,200,255 })
+    }
+}
+Thread :: ui.Renderer{
+    title = "Thread",
+    fn = proc(x,y,w,h: i32) {
+        rl.DrawRectangle(x,y,w,h, { 50,50,50,255 })
+        rl.DrawText("Thread", x+w/2, y+h/2, i32(FONT_SIZE), { 200,200,200,255 })
+    }
+}
