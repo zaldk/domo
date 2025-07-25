@@ -5,79 +5,118 @@ import "core:math"
 import "core:mem"
 import rl "vendor:raylib"
 
-Box :: struct {
-    x, y, w, h: i32
-}
+Renderer :: #type proc(x, y, w, h: i32)
 
-// H => top, bottom
-// V => left, right
+// H => left, right
+// V => top, bottom
 // T => [..tabs]
 LayoutType :: enum { H, V, T }
-Part :: union { Layout, string }
+Part :: union { Layout, Renderer }
 Layout :: struct {
     type: LayoutType,
     parts: []Part,
-    split: f32, // H|V
+    split: f32,  // H|V
     active: int, // T
 }
 
-CTX : Context
+Window :: struct {
+    x,y,w,h: i32,
+    renderer: Renderer,
+}
+
+Bar :: struct {
+    x,y,w,h: i32,
+}
+
+MouseButton :: enum { LEFT }
+MouseState :: enum { UP, DOWN }
+
+CTX : ^Context
 Context :: struct {
-    box: Box,
-    font_size: f32,
-    title: string,
+    layout: Layout,
     allocator: mem.Allocator,
-    commands: [dynamic]Command,
+
+    mouse_x, mouse_y: i32,
+    scroll_dx, scroll_dy: i32,
+    mouse_state: [MouseButton]MouseState,
+    mouse_state_changed: bool,
+
+    layout_windows: []Window,
+    layout_bars: []Bar,
 }
 
-Command :: struct {
-    type: CommandType,
-    input: CommandInput,
+free_context :: proc(ctx: ^Context) {
+    free_layout(ctx.layout)
+    delete(ctx.layout_windows)
+    delete(ctx.layout_bars)
 }
-CommandType :: enum {
-    RENDER,
-    DRAW_RECT,
-    DRAW_TEXT,
-    BEGIN_SCISSOR_MODE,
-    END_SCISSOR_MODE,
-}
-CommandInput :: union {
-    Render,
-    DrawRect,
-    DrawText,
-    BeginScissorMode,
-    EndScissorMode,
-}
-Render :: struct { title: string, x,y,w,h: i32, font_size: f32 }
-DrawRect :: struct { aabb: [4]i32, color: [4]f32 }
-DrawText :: struct { text: string, pos: [2]i32, font_size: f32, color: [4]f32 }
-BeginScissorMode :: struct { x, y, w, h: i32 }
-EndScissorMode :: struct {}
-
-WindowRenderer :: #type proc(ctx: ^Context, title: string, x,y,w,h: i32, font_size: f32)
-
-MeasureTextWidth :: #type proc(text: string, size: f32) -> f32
-MeasureTextHeight :: #type proc(text: string, size: f32) -> f32
-GetMouseX :: #type proc() -> i32
-GetMouseY :: #type proc() -> i32
-GetMouseWheelMoveX :: #type proc() -> f32
-GetMouseWheelMoveY :: #type proc() -> f32
-IsMouseButtonDown :: #type proc(button: i32) -> bool
-IsMouseButtonPressed :: #type proc(button: i32) -> bool
-
-init :: proc(width, height: i32, title: string, font_size: f32, allocator := context.allocator) {
-    CTX.box = {0, 0, width, height}
-    CTX.font_size = font_size
-    CTX.title = title
-    CTX.allocator = allocator
-    CTX.commands = make([dynamic]Command, allocator)
-}
-
-destroy_layout :: proc(layout: ^Layout) {
-    for part in layout.parts {
-        if p, ok := part.(Layout); ok {
-            destroy_layout(&p)
+free_layout :: proc(l: Layout) {
+    if len(l.parts) > 0 {
+        for part in l.parts {
+            if p, ok := part.(Layout); ok { free_layout(p) }
         }
+        delete(l.parts)
+    }
+}
+
+init_context :: proc(allocator := context.allocator) -> ^Context {
+    CTX^ = { allocator=allocator }
+    return CTX
+}
+set_layout :: proc(layout: Layout) {
+    CTX.layout = layout
+
+    layout_count := count(layout)
+    CTX.layout_windows = make([]Window, layout_count.x)
+    CTX.layout_bars = make([]Bar, layout_count.y)
+
+    // .x == Window   .y == Bar
+    count :: proc(l: Layout) -> (result: [2]int) {
+        if l.type == .H || l.type == .V do result.y += 1
+        for part in l.parts {
+            switch p in part {
+            case Layout: result += count(p)
+            case Renderer: result.x += 1
+            }
+        }
+        return
+    }
+}
+
+update_mouse_position :: proc(x, y: i32) { CTX.mouse_x=x; CTX.mouse_y=y }
+update_mouse_wheel :: proc(dx, dy: i32) { CTX.scroll_dx=dx; CTX.scroll_dy=dy }
+update_mouse_button_state :: proc(button: MouseButton, state: MouseState) {
+    CTX.mouse_state_changed = CTX.mouse_state[button] != state
+    CTX.mouse_state[button] = state
+}
+
+expand_layout :: proc() {
+    // finds all windows and splitting bars and inserts them into CTX
+
+    l := CTX.layout
+    Box :: struct { x, y, w, h: i32 }
+
+    helper :: proc(l: Layout, b: Box) {
+        @(static) window_index := 0
+        if len(l.parts) > 0 {
+            switch l.type {
+            case .H, .V:
+                
+            case .T:
+                part := l.parts[l.active]
+                switch p in part {
+                case Renderer: CTX.layout_windows[window_index] = {b.x,b.y,b.w,b.h, p}; window_index += 1
+                case Layout: helper(p, b)
+                }
+            }
+        }
+    }
+}
+
+render :: proc(WIDTH, HEIGHT: i32, FONT_SIZE: f32) {
+    expand_layout()
+    for w in CTX.layout_windows {
+        w.renderer(w.x, w.y, w.w, w.h)
     }
 }
 
@@ -86,173 +125,6 @@ layout :: proc(ctx: ^Context, type: LayoutType, parts: ..Part, split := f32(0), 
     for p, i in parts do _parts[i] = p
     return { type, _parts, split, active_tab }
 }
-h :: proc(split: f32, top, bottom: Part) -> Layout { return layout(&CTX, .H, top, bottom, split=split)      }
-v :: proc(split: f32, left, right: Part) -> Layout { return layout(&CTX, .V, left, right, split=split)      }
-t :: proc(tabs: ..Part, active_tab := 0) -> Layout { return layout(&CTX, .T, ..tabs, active_tab=active_tab) }
-
-render :: proc(layout: Layout) {
-
-    queue := make([dynamic]Layout, CTX.allocator)
-    append(&queue, layout)
-
-    for len(queue) > 0 {
-        l := pop_front(&queue)
-        switch l.type {
-        case .H, .V:
-            if len(l.parts) != 2 do return
-        case .T:
-        }
-    }
-
-    _render(&CTX, layout)
-    _render :: proc(ctx: ^Context, l: Layout) {
-        separator_girth := i32(8)
-        switch l.type {
-        case .H, .V:
-            if len(l.parts) != 2 do return
-            for part, i in l.parts {
-                part_ctx := ctx^
-                if l.type == .H {
-                    if i == 0 { // top
-                        part_ctx.box.h = i32(f32(part_ctx.box.h) * l.split)
-                    }
-                    if i == 1 { // bottom
-                        part_ctx.box.y += i32(f32(part_ctx.box.h) * l.split)
-                        part_ctx.box.h  = i32(f32(part_ctx.box.h) * (1-l.split))
-                        part_ctx.box.y += separator_girth/2
-                    }
-                    part_ctx.box.h -= separator_girth/2
-                } else if l.type == .V {
-                    if i == 0 { // left
-                        part_ctx.box.w = i32(f32(part_ctx.box.w) * l.split)
-                    }
-                    if i == 1 { // right
-                        part_ctx.box.x += i32(f32(part_ctx.box.w) * l.split)
-                        part_ctx.box.w  = i32(f32(part_ctx.box.w) * (1-l.split))
-                        part_ctx.box.x += separator_girth/2
-                    }
-                    part_ctx.box.w -= separator_girth/2
-                }
-
-                switch p in part {
-                case Layout: _render(&part_ctx, p)
-                case string: append(&ctx.commands, Command{
-                    type = .RENDER,
-                    input = Render{
-                        title=p,
-                        x=ctx.box.x, y=ctx.box.y, w=ctx.box.w, h=ctx.box.h,
-                        font_size=ctx.font_size,
-                    },
-                })
-                }
-            }
-            return
-        case .T:
-            for part, i in l.parts {
-                part_ctx := ctx^
-                switch p in part {
-                case Layout: _render(&part_ctx, p)
-                case string: append(&ctx.commands, Command{
-                    type = .RENDER,
-                    input = Render{
-                        title=p,
-                        x=ctx.box.x, y=ctx.box.y, w=ctx.box.w, h=ctx.box.h,
-                        font_size=ctx.font_size,
-                    },
-                })
-                }
-            }
-        }
-    }
-}
-
-// render :: proc(ctx: ^Context, layout: Layout) {
-//     l := layout
-//     separator_girth := i32(8)
-//
-//     if l.type == .H || l.type == .V {
-//         if len(l.parts) != 2 do return
-//         for t, i in l.parts {
-//             part_ctx := ctx^
-//             if l.type == .H {
-//                 if i == 0 { // top
-//                     part_ctx.h = i32(f32(part_ctx.h) * l.split)
-//                 }
-//                 if i == 1 { // bottom
-//                     part_ctx.y += i32(f32(part_ctx.h) * l.split)
-//                     part_ctx.h  = i32(f32(part_ctx.h) * (1-l.split))
-//                     part_ctx.y += separator_girth/2
-//                 }
-//                 part_ctx.h -= separator_girth/2
-//             }
-//             if l.type == .V {
-//                 if i == 0 { // left
-//                     part_ctx.w = i32(f32(part_ctx.w) * l.split)
-//                 }
-//                 if i == 1 { // right
-//                     part_ctx.x += i32(f32(part_ctx.w) * l.split)
-//                     part_ctx.w  = i32(f32(part_ctx.w) * (1-l.split))
-//                     part_ctx.x += separator_girth/2
-//                 }
-//                 part_ctx.w -= separator_girth/2
-//             }
-//
-//             switch t in l.parts[i] {
-//             case Layout: render(&part_ctx, t)
-//             case string:
-//                 renderer, ok := part_ctx.renderers[t]
-//                 if !ok do renderer = DEFAULT_RENDERER
-//                 ctx.begin_scissor_mode(part_ctx.x, part_ctx.y, part_ctx.w, part_ctx.h)
-//                 renderer(&part_ctx, t, part_ctx.x, part_ctx.y, part_ctx.w, part_ctx.h, part_ctx.font_size)
-//                 ctx.end_scissor_mode()
-//             }
-//             if i == 1 {
-//                 ab := [?]i32{part_ctx.x, part_ctx.y, part_ctx.w, part_ctx.h}
-//                 s := separator_girth
-//                 if l.type == .H {
-//                     ctx.draw_rect({ab.x, ab.y-s  , ab.z, s  }, {0,0,0,1})
-//                     ctx.draw_rect({ab.x, ab.y-s+1, ab.z, s-2}, {.3,.3,.3,1})
-//                 }
-//                 if l.type == .V {
-//                     ctx.draw_rect({ab.x-s  , ab.y, s  , ab.w}, {0,0,0,1})
-//                     ctx.draw_rect({ab.x-s+1, ab.y, s-2, ab.w}, {.3,.3,.3,1})
-//                 }
-//             }
-//         }
-//         return
-//     } // else: l.type == .T
-//
-//     if len(l.parts) == 0 do return
-//
-//     tabbar_font_size := f32(18)
-//     tabbar_height := i32(tabbar_font_size * 1.25)
-//     tabbar := [?]i32{ ctx.x, ctx.y, ctx.w, tabbar_height }
-//
-//     ctx.draw_rect({tabbar.x,tabbar.y,tabbar.z,tabbar.w}, {0,0,0,.25})
-//     // ctx.draw_rect_lines(tabbar.x+1,tabbar.y+1,tabbar_width-1,tabbar_height-1, 0,0,1,1)
-//     total_width : f32 = tabbar_font_size/2
-//     space_width := ctx.measure_text_width(" ", tabbar_font_size)
-//     ctx.begin_scissor_mode(tabbar.x,tabbar.y,tabbar.z,tabbar_height)
-//     for t in l.parts {
-//         tw := ctx.measure_text_width(t.(string), tabbar_font_size)
-//         th := ctx.measure_text_height(t.(string), tabbar_font_size)
-//         defer total_width += tw + tabbar_font_size/2
-//         text_pos := [2]i32{ ctx.x + i32(total_width), ctx.y + tabbar_height-i32(tabbar_font_size) }
-//         box_delta := i32(tabbar_font_size/4)
-//         ctx.draw_rect({text_pos.x-box_delta, text_pos.y, i32(tw)+box_delta*2, i32(th)}, {0,.3,.3,1})
-//         ctx.draw_text(t.(string), text_pos.x, text_pos.y, tabbar_font_size, 1,1,1,1)
-//     }
-//     ctx.end_scissor_mode()
-//
-//     tab_ctx := ctx^
-//     tab_ctx.h -= tabbar_height
-//     tab_ctx.y += tabbar_height
-//
-//     _delta := int(rl.GetTime())
-//     t := l.parts[(l.active + _delta) % len(l.parts)]
-//     renderer, ok := tab_ctx.renderers[t.(string)]
-//     if !ok do renderer = DEFAULT_RENDERER
-//     ctx.begin_scissor_mode(tab_ctx.x, tab_ctx.y, tab_ctx.w, tab_ctx.h)
-//     renderer(&tab_ctx, t.(string), tab_ctx.x, tab_ctx.y, tab_ctx.w, tab_ctx.h, tab_ctx.font_size)
-//     ctx.end_scissor_mode()
-// }
+h :: proc(split: f32, top, bottom: Part) -> Layout { return layout(CTX, .H, top, bottom, split=split)      }
+v :: proc(split: f32, left, right: Part) -> Layout { return layout(CTX, .V, left, right, split=split)      }
+t :: proc(tabs: ..Part, active_tab := 0) -> Layout { return layout(CTX, .T, ..tabs, active_tab=active_tab) }

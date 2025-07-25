@@ -11,7 +11,7 @@ import rl "vendor:raylib"
 DOMO_VERSION :: #config(DOMO_VERSION, "N/A")
 
 NUM_SCALES :: len(SCALES)
-SCALES := [?]f32{0.25, 0.33, 0.5, 0.67, 0.75, 1.0, 1.25, 1.33, 1.5, 1.75, 2.0}
+@(rodata) SCALES := [?]f32{0.25, 0.33, 0.5, 0.67, 0.75, 1.0, 1.25, 1.33, 1.5, 1.75, 2.0}
 SCALE : f32 = 1.0
 SCALE_INDEX := 5
 SCALE_DELTA := 0
@@ -24,16 +24,10 @@ FONTS : [NUM_SCALES]rl.Font
 Theme :: enum{DARK=0, LIGHT}
 THEME : Theme = .DARK
 
-TARGET_FPS :: 144
-DOMO_SHOULD_CLOSE := false
-
 WIDTH  : i32 = 1000
 HEIGHT : i32 = 1000
 
 main :: proc() {
-    // {{{ Tracking + Temp. Allocator
-    // track my faulty programming
-    // taken from youtube.com/watch?v=dg6qogN8kIE
     tracking_allocator : mem.Tracking_Allocator
     mem.tracking_allocator_init(&tracking_allocator, context.allocator)
     context.allocator = mem.tracking_allocator(&tracking_allocator)
@@ -49,54 +43,56 @@ main :: proc() {
     defer free_all(context.temp_allocator)
     context.logger = log.create_console_logger(opt = {.Level, .Time, .Short_File_Path, .Line, .Terminal_Color, .Procedure})
     defer log.destroy_console_logger(context.logger)
-    // }}}
 
 
 
-    ui.init(WIDTH, HEIGHT, "DEMO", FONT_SIZE, context.temp_allocator)
-    layout : ui.Layout = ui.v(0.6,
-        ui.h(0.4,
-            "A",
-            ui.t("1", "2", ui.v(0.5, 
-                "PI",
-                ui.t("E", "PHI")
-            ), "4", "5"),
-        ),
-        ui.h(0.75,
-            ui.h(0.5, "B", "C"),
-            "D",
-        ),
-    )
-    defer ui.destroy_layout(&layout)
-    fmt.printf("\n%#v\n", layout)
+    ctx := ui.init_context()
+    defer ui.free_context(ctx)
+    ui.set_layout(
+        ui.h(.75,
+            ui.v(.75,
+                Source,
+                Console),
+            ui.v(.50,
+                ui.t(Breakpoints, Commands, Struct, Exe),
+                ui.t(Stack, Files, Registers, Data, Thread))))
 
-    ui.render(layout)
-    fmt.println(ui.CTX.commands)
 
-    if true do return
 
     rl.SetConfigFlags({ .WINDOW_RESIZABLE })
     rl.InitWindow(WIDTH, HEIGHT, "FLOAT")
     defer rl.CloseWindow()
-    rl.SetTargetFPS(TARGET_FPS)
+    rl.SetTargetFPS(144)
     scale_global(0)
     defer { for i in 0..<NUM_SCALES { if FONTS[i] != {} { rl.UnloadFont(FONTS[i]) } } }
 
-    for !(rl.WindowShouldClose() || DOMO_SHOULD_CLOSE) {
-        if rl.IsKeyPressed(.EQUAL) { scale_global(+1) }
-        if rl.IsKeyPressed(.MINUS) { scale_global(-1) }
-
+    for !rl.WindowShouldClose() {
         rl.BeginDrawing()
         rl.ClearBackground({0,0,0,255})
 
         WIDTH  = rl.GetScreenWidth()
         HEIGHT = rl.GetScreenHeight()
 
-        // ui.update(&ctx, &layout)
-        // ui.render(&ctx, layout)
+        ui.update_mouse_position(i32(rl.GetMousePosition().x), i32(rl.GetMousePosition().y))
+        ui.update_mouse_button_state(.LEFT, rl.IsMouseButtonDown(.LEFT) ? .DOWN : .UP)
+        ui.update_mouse_wheel(i32(rl.GetMouseWheelMoveV().x), i32(rl.GetMouseWheelMoveV().y))
+
+        ui.render(WIDTH, HEIGHT, FONT_SIZE)
 
         rl.DrawFPS(0, 0)
         rl.EndDrawing()
         defer free_all(context.temp_allocator)
     }
 }
+
+Source      :: proc(x,y,w,h: i32) { rl.DrawRectangle(x,y,w,h, {20,20,20,255}); rl.DrawText("Source",      x+w/2, y+h/2, i32(FONT_SIZE), {200,200,200,255}) }
+Console     :: proc(x,y,w,h: i32) { rl.DrawRectangle(x,y,w,h, {20,20,20,255}); rl.DrawText("Console",     x+w/2, y+h/2, i32(FONT_SIZE), {200,200,200,255}) }
+Breakpoints :: proc(x,y,w,h: i32) { rl.DrawRectangle(x,y,w,h, {20,20,20,255}); rl.DrawText("Breakpoints", x+w/2, y+h/2, i32(FONT_SIZE), {200,200,200,255}) }
+Commands    :: proc(x,y,w,h: i32) { rl.DrawRectangle(x,y,w,h, {20,20,20,255}); rl.DrawText("Commands",    x+w/2, y+h/2, i32(FONT_SIZE), {200,200,200,255}) }
+Struct      :: proc(x,y,w,h: i32) { rl.DrawRectangle(x,y,w,h, {20,20,20,255}); rl.DrawText("Struct",      x+w/2, y+h/2, i32(FONT_SIZE), {200,200,200,255}) }
+Exe         :: proc(x,y,w,h: i32) { rl.DrawRectangle(x,y,w,h, {20,20,20,255}); rl.DrawText("Exe",         x+w/2, y+h/2, i32(FONT_SIZE), {200,200,200,255}) }
+Stack       :: proc(x,y,w,h: i32) { rl.DrawRectangle(x,y,w,h, {20,20,20,255}); rl.DrawText("Stack",       x+w/2, y+h/2, i32(FONT_SIZE), {200,200,200,255}) }
+Files       :: proc(x,y,w,h: i32) { rl.DrawRectangle(x,y,w,h, {20,20,20,255}); rl.DrawText("Files",       x+w/2, y+h/2, i32(FONT_SIZE), {200,200,200,255}) }
+Registers   :: proc(x,y,w,h: i32) { rl.DrawRectangle(x,y,w,h, {20,20,20,255}); rl.DrawText("Registers",   x+w/2, y+h/2, i32(FONT_SIZE), {200,200,200,255}) }
+Data        :: proc(x,y,w,h: i32) { rl.DrawRectangle(x,y,w,h, {20,20,20,255}); rl.DrawText("Data",        x+w/2, y+h/2, i32(FONT_SIZE), {200,200,200,255}) }
+Thread      :: proc(x,y,w,h: i32) { rl.DrawRectangle(x,y,w,h, {20,20,20,255}); rl.DrawText("Thread",      x+w/2, y+h/2, i32(FONT_SIZE), {200,200,200,255}) }
