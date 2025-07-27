@@ -21,8 +21,12 @@ main :: proc() {
     serr := setup_build_dir()
     assert(serr == nil)
 
+    do_run := len(os.args) == 1 || os.args[1] == "run"
+
     _cmd := [?]string{
-        "odin run ./src",
+        "odin",
+        do_run ? "run" : "build",
+        "./src",
         fmt.tprintf("-out:%v.%v.dev", filepath.join({BUILD_DIR, NAME}) or_else "", version),
         "-collection:src=src",
         "-o:minimal",
