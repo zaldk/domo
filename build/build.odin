@@ -4,9 +4,9 @@ import "core:c/libc"
 import "core:fmt"
 import "core:log"
 import "core:os"
+import "core:mem"
 import "core:time"
 import "core:strings"
-import "core:path/filepath"
 import dt "core:time/datetime"
 
 NAME :: "DOMO"
@@ -14,8 +14,10 @@ BUILD_DIR :: "./.build"
 GITIGNORE_PATH :: "./.build/.gitignore"
 
 main :: proc() {
-    context.logger = log.create_console_logger(.Info, {.Level, .Terminal_Color})
     context.allocator = context.temp_allocator
+    context.logger = log.create_console_logger(.Info, {.Level, .Terminal_Color})
+    defer log.destroy_console_logger(context.logger)
+
     version, verr := get_version()
     assert(verr == nil)
     serr := setup_build_dir()
@@ -27,16 +29,16 @@ main :: proc() {
         "odin",
         do_run ? "run" : "build",
         "./src",
-        fmt.tprintf("-out:%v.%v.dev", filepath.join({BUILD_DIR, NAME}) or_else "", version),
+        fmt.aprintf("-out:%v/%v.%v.dev", BUILD_DIR, NAME, version),
         "-collection:src=src",
         "-o:minimal",
         "-debug",
         "-target:linux_amd64",
-        fmt.tprintf("-define:%v_VERSION=%v", NAME, version),
+        fmt.aprintf("-define:%v_VERSION=%v", NAME, version),
     }
-    cmd := strings.join(
-        _cmd[:], " ")
-    ok := exec(strings.clone_to_cstring(cmd))
+    cmd := strings.join(_cmd[:], " ")
+    defer delete(cmd)
+    ok := exec(strings.unsafe_string_to_cstring(cmd))
     assert(ok)
 }
 
