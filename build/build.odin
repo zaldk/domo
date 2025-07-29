@@ -15,7 +15,7 @@ GITIGNORE_PATH :: "./.build/.gitignore"
 
 main :: proc() {
     context.allocator = context.temp_allocator
-    context.logger = log.create_console_logger(.Info, {.Level, .Terminal_Color})
+    context.logger = log.create_console_logger(.Info, {.Level, .Terminal_Color, .Line})
     defer log.destroy_console_logger(context.logger)
 
     version, verr := get_version()
@@ -23,22 +23,22 @@ main :: proc() {
     serr := setup_build_dir()
     assert(serr == nil)
 
-    do_run := len(os.args) == 1 || os.args[1] == "run"
+    do_run := len(os.args) < 2 || os.args[1] == "run"
+    do_release := len(os.args) == 2 && os.args[1] == "release"
 
     _cmd := [?]string{
         "odin",
         do_run ? "run" : "build",
         "./src",
         fmt.aprintf("-out:%v/%v.%v.dev", BUILD_DIR, NAME, version),
-        "-collection:src=src",
-        "-o:minimal",
-        "-debug",
-        "-target:linux_amd64",
+        do_release ? "-o:speed" : "-debug",
         fmt.aprintf("-define:%v_VERSION=%v", NAME, version),
     }
     cmd := strings.join(_cmd[:], " ")
     defer delete(cmd)
-    ok := exec(strings.unsafe_string_to_cstring(cmd))
+    cstr := strings.clone_to_cstring(cmd)
+    defer delete(cstr)
+    ok := exec(cstr)
     assert(ok)
 }
 
@@ -79,7 +79,7 @@ setup_build_dir :: proc() -> os.Error {
 }
 
 exec :: proc(command: cstring) -> bool {
-    log.infof("Running: `%v`", command)
+    log.infof("Running `%v`", command)
     res := libc.system(command)
 
     when ODIN_OS == .Windows {

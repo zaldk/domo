@@ -5,18 +5,24 @@ import "core:math"
 import "core:mem"
 
 Color :: [4]u8 // rgba
-COLOR_BLACK    :: Color{   0,   0,   0, 255 }
-COLOR_WHITE    :: Color{ 255, 255, 255, 255 }
-COLOR_FG       :: Color{ 200, 200, 200, 255 }
-COLOR_BG_DARK  :: Color{   5,   5,   5, 255 }
-COLOR_BG       :: Color{  20,  20,  20, 255 }
-COLOR_BG_LIGHT :: Color{  40,  40,  40, 255 }
+COLOR_BLACK    :: Color{   0,   0,   0, 0xFF }
+COLOR_WHITE    :: Color{ 255, 255, 255, 0xFF }
+COLOR_FG       :: Color{ 200, 200, 200, 0xFF }
+COLOR_BG_DARK  :: Color{  10,  10,  10, 0xFF }
+COLOR_BG       :: Color{  20,  20,  20, 0xFF }
+COLOR_BG_LIGHT :: Color{  40,  40,  40, 0xFF }
+COLOR_BG_TAB   :: Color{  35,  35,  45, 0xFF }
 
 Box :: struct { x, y, w, h: i32 }
 
+CommandType :: enum { WINDOW, RECT, TEXT, SCISSOR_ON, SCISSOR_OFF }
 Command :: struct {
-    using box: Box,
-    title: string,
+    type: CommandType,
+    using box: Box, // .xywh for WINDOW, RECT and SCISSOR, .xy for TEXT
+    title: string,  // for WINDOW
+    color: Color,   // for RECT and TEXT
+    text: string,   // for TEXT
+    font_size: f32, // for TEXT
 }
 
 // H => left, right
@@ -25,6 +31,7 @@ Command :: struct {
 Part :: union { Layout, string }
 LayoutType :: enum { H, V, T }
 Layout :: struct {
+    id: i32,
     type: LayoutType,
     parts: []Part,
     split: f32,  // H|V
@@ -35,15 +42,13 @@ Layout :: struct {
 MouseButton :: enum { LEFT }
 MouseState :: enum { UP, DOWN }
 
+HoverType :: enum { NONE, BUTTON, DRAGBAR_H, DRAGBAR_V }
+
 CTX : ^Context
 Context :: struct {
     layout: Layout,
     allocator: mem.Allocator,
 
-    draw_rect: proc(x,y,w,h: i32, color: [4]u8),
-    draw_text: proc(text: string, x,y: i32, font_size: f32, color: [4]u8),
-    begin_scissor: proc(x,y,w,h: i32),
-    end_scissor: proc(),
     measure_text_w: proc(text: string, font_size: f32) -> (f32),
     measure_text_h: proc(text: string, font_size: f32) -> (f32),
 
@@ -52,9 +57,9 @@ Context :: struct {
     mouse_state: [MouseButton]MouseState,
     mouse_state_changed: bool,
 
-    is_hovering_over_buttons: bool,
-    is_hovering_over_dragbars: bool,
+    hovering_over: HoverType,
     is_moving_dragbar: bool,
+    dragbar_id: i32,
 
     commands: [dynamic]Command,
 }
@@ -78,12 +83,23 @@ init_context :: proc(allocator := context.allocator) {
     CTX.commands = make([dynamic]Command, CTX.allocator)
 }
 set_layout :: proc(layout: Layout) { CTX.layout = layout }
-set_draw_rect      :: proc(fn: proc(x,y,w,h: i32, color: [4]u8))                           { CTX.draw_rect      = fn }
-set_draw_text      :: proc(fn: proc(text: string, x,y: i32, font_size: f32, color: [4]u8)) { CTX.draw_text      = fn }
-set_begin_scissor  :: proc(fn: proc(x,y,w,h: i32))                                         { CTX.begin_scissor  = fn }
-set_end_scissor    :: proc(fn: proc())                                                     { CTX.end_scissor    = fn }
-set_measure_text_w :: proc(fn: proc(text: string, font_size: f32) -> f32)                  { CTX.measure_text_w = fn }
-set_measure_text_h :: proc(fn: proc(text: string, font_size: f32) -> f32)                  { CTX.measure_text_h = fn }
+set_measure_text_w :: proc(fn: proc(text: string, font_size: f32) -> f32) { CTX.measure_text_w = fn }
+set_measure_text_h :: proc(fn: proc(text: string, font_size: f32) -> f32) { CTX.measure_text_h = fn }
+
+get_hover :: proc() -> HoverType { return CTX.hovering_over }
+should_reset_hover :: proc() -> bool { return !CTX.is_moving_dragbar }
+reset_hover :: proc() { CTX.hovering_over = .NONE }
+
+cmd :: proc(type: CommandType, command: Command) {
+    command := command
+    command.type = type
+    append(&CTX.commands, command)
+}
+
+next_command :: proc() -> (Command, bool) {
+    if len(CTX.commands) > 0 do return pop_front(&CTX.commands), true
+    return {}, false
+}
 
 update_mouse_position :: proc(x, y: i32) { CTX.mouse_x=x; CTX.mouse_y=y }
 update_mouse_wheel :: proc(dx, dy: i32) { CTX.scroll_dx=dx; CTX.scroll_dy=dy }
@@ -95,10 +111,12 @@ update_mouse_button_state :: proc(button: MouseButton, state: MouseState) {
 render :: proc(width, height: i32, font_size: f32) {
     queue := make([dynamic]^Layout, CTX.allocator)
     defer delete(queue)
+
     CTX.layout.box = Box{0,0,width,height}
     append(&queue, &CTX.layout)
 
     bar_width := i32(font_size * 0.2)
+    bar_border := i32(1)
     button_colors := [?]Color{COLOR_BG_LIGHT, COLOR_BG_DARK, COLOR_BG}
 
     for len(queue) > 0 {
@@ -116,14 +134,23 @@ render :: proc(width, height: i32, font_size: f32) {
                 b.y += i32(f32(b.h) * l.split) - bar_width/2
                 b.h = bar_width
             }
-            new_split := dragbar(b, width, height)
-            if new_split > 0 && new_split < 1 do l.split = new_split
+            new_split := dragbar(b, l.id, width, height)
+            if new_split > 0.01 && new_split < 0.99 {
+                l.split = new_split
+                b = l.box
+                if l.type == .H {
+                    b.x += i32(f32(b.w) * l.split) - bar_width/2
+                    b.w = bar_width
+                } else {
+                    b.y += i32(f32(b.h) * l.split) - bar_width/2
+                    b.h = bar_width
+                }
+            }
+            cmd(.RECT, { box=b, color=COLOR_BLACK})
             if l.type == .H {
-                CTX.draw_rect(b.x, b.y, b.w, b.h, COLOR_BLACK)
-                CTX.draw_rect(b.x+1, b.y, b.w-2, b.h, COLOR_BG_LIGHT)
+                cmd(.RECT, { box=b, x=b.x+bar_border, w=b.w-2*bar_border, color=COLOR_BG_LIGHT})
             } else {
-                CTX.draw_rect(b.x, b.y, b.w, b.h, COLOR_BLACK)
-                CTX.draw_rect(b.x, b.y+1, b.w, b.h-2, COLOR_BG_LIGHT)
+                cmd(.RECT, { box=b, y=b.y+bar_border, h=b.h-2*bar_border, color=COLOR_BG_LIGHT})
             }
 
             for &part, i in l.parts {
@@ -133,7 +160,7 @@ render :: proc(width, height: i32, font_size: f32) {
                         q.w  = i32(f32(q.w)*l.split) - bar_width/2
                     } else {
                         q.x += i32(f32(q.w)*l.split) + bar_width/2
-                        q.w  = i32(f32(q.w)*(1-l.split)) - bar_width/2
+                        q.w  = i32(f32(q.w)*(1-l.split)) - bar_width/2 + 1
                     }
                 }
                 if l.type == .V {
@@ -141,12 +168,15 @@ render :: proc(width, height: i32, font_size: f32) {
                         q.h  = i32(f32(q.h)*l.split) - bar_width/2
                     } else {
                         q.y += i32(f32(q.h)*l.split) + bar_width/2
-                        q.h  = i32(f32(q.h)*(1-l.split)) - bar_width/2
+                        q.h  = i32(f32(q.h)*(1-l.split)) - bar_width/2 + 1
                     }
                 }
                 switch &p in part {
                 case Layout: p.box = q; append(&queue, &p)
-                case string: append(&CTX.commands, Command{ q, p })
+                case string:
+                    cmd(.SCISSOR_ON, { box=q })
+                    cmd(.WINDOW, { box=q, title=p })
+                    cmd(.SCISSOR_OFF, {})
                 }
             }
         } else {
@@ -155,11 +185,12 @@ render :: proc(width, height: i32, font_size: f32) {
 
             delta := i32(font_size * 0.25)
             tabbar := Box{l.x, l.y, l.w, delta*5}
-            window := Box{l.x, l.y+tabbar.h, l.w, l.h-tabbar.h}
+            window_box := Box{l.x, l.y+tabbar.h, l.w, l.h-tabbar.h}
             sum_width := delta
 
-            CTX.draw_rect(tabbar.x, tabbar.y, tabbar.w, tabbar.h, COLOR_BLACK)
-            CTX.draw_rect(tabbar.x, tabbar.y, tabbar.w, tabbar.h-1, COLOR_BG_LIGHT)
+            cmd(.SCISSOR_ON, { box=tabbar })
+            cmd(.RECT, { box=tabbar, color=COLOR_BLACK })
+            cmd(.RECT, { box=tabbar, h=tabbar.h-1, color=COLOR_BG_TAB })
 
             for &part, i in l.parts {
                 switch p in part {
@@ -169,7 +200,7 @@ render :: proc(width, height: i32, font_size: f32) {
                     title_height := i32(CTX.measure_text_h(p, font_size))
                     tab_title_box := Box{
                         tabbar.x + sum_width,
-                        tabbar.y+tabbar.h-title_height,
+                        tabbar.y + tabbar.h - title_height,
                         title_width+delta*2,
                         title_height,
                     }
@@ -177,15 +208,24 @@ render :: proc(width, height: i32, font_size: f32) {
                     state, action := button(tab_title_box)
                     if action do l.active = i
 
-                    CTX.draw_rect(tab_title_box.x, tab_title_box.y, tab_title_box.w, tab_title_box.h, COLOR_BLACK)
-                    CTX.draw_rect(tab_title_box.x+1, tab_title_box.y+1, tab_title_box.w-2, tab_title_box.h-2,
-                        l.active == i ? COLOR_BG : button_colors[state] )
-                    CTX.draw_text(p, tab_title_box.x+delta, tab_title_box.y, font_size, COLOR_FG)
+                    tab_title_box_inner := tab_title_box
+                    tab_title_box_inner.x += 1
+                    tab_title_box_inner.y += 1
+                    tab_title_box_inner.w -= 2
+                    tab_title_box_inner.h -= 2
+
+                    cmd(.RECT, { box=tab_title_box, color=COLOR_BLACK})
+                    cmd(.RECT, { box=tab_title_box_inner, color=l.active == i ? COLOR_BG : button_colors[state]})
+                    cmd(.TEXT, { text=p, x=tab_title_box.x+delta, y=tab_title_box.y, font_size=font_size, color=COLOR_FG })
+
                     sum_width += tab_title_box.w + delta
                 }
             }
+            cmd(.SCISSOR_OFF, {})
 
-            append(&CTX.commands, Command{ window, l.parts[l.active].(string) })
+            cmd(.SCISSOR_ON, { box=window_box })
+            cmd(.WINDOW, { box=window_box, title=l.parts[l.active].(string) })
+            cmd(.SCISSOR_OFF, {})
         }
     }
 }
@@ -197,7 +237,7 @@ CheckCollisionPointRec :: proc(x,y: i32, box: Box) -> bool {
 // 0=normal 1=hover 2=press
 button :: proc(box: Box) -> (state: i32, action: bool) {
     if CheckCollisionPointRec(CTX.mouse_x, CTX.mouse_y, box) {
-        CTX.is_hovering_over_buttons = true
+        CTX.hovering_over = .BUTTON
         state = 1 + i32(CTX.mouse_state[.LEFT] == .DOWN)
         action = CTX.mouse_state_changed && CTX.mouse_state[.LEFT] == .DOWN
     } else { state = 0 }
@@ -205,15 +245,24 @@ button :: proc(box: Box) -> (state: i32, action: bool) {
     return
 }
 
-dragbar :: proc(box: Box, window_w, window_h: i32) -> (split: f32 = -1) {
-    if CheckCollisionPointRec(CTX.mouse_x, CTX.mouse_y, box) {
-        CTX.is_hovering_over_dragbars = true
-        if CTX.mouse_state[.LEFT] == .DOWN {
-            if box.w > box.h {
-                split = f32(CTX.mouse_y) / f32(window_h)
-            } else {
-                split = f32(CTX.mouse_x) / f32(window_w)
-            }
+dragbar :: proc(box: Box, id: i32, window_w, window_h: i32) -> (split: f32 = -1) {
+    mouse_in_box := CheckCollisionPointRec(CTX.mouse_x, CTX.mouse_y, box)
+    if mouse_in_box do CTX.hovering_over = box.w > box.h ? .DRAGBAR_V : .DRAGBAR_H
+
+    if !CTX.is_moving_dragbar && mouse_in_box && CTX.mouse_state[.LEFT] == .DOWN {
+        CTX.is_moving_dragbar = true
+        CTX.dragbar_id = id
+    }
+    if CTX.is_moving_dragbar &&
+        CTX.mouse_state[.LEFT] == .UP {
+        CTX.is_moving_dragbar = false
+    }
+
+    if CTX.is_moving_dragbar && id == CTX.dragbar_id {
+        if box.w > box.h {
+            split = f32(CTX.mouse_y) / f32(window_h)
+        } else {
+            split = f32(CTX.mouse_x) / f32(window_w)
         }
     }
 
@@ -221,10 +270,22 @@ dragbar :: proc(box: Box, window_w, window_h: i32) -> (split: f32 = -1) {
 }
 
 layout :: proc(ctx: ^Context, type: LayoutType, parts: ..Part, split := f32(0), active_tab := 0) -> Layout {
+    split := split
+    if split < 0 || split > 1 {
+        new_split := math.clamp(split, 0, 1)
+        log.warnf("Splits must be in the range 0.0 to 1.0, got: %v, using: %v", split, new_split)
+        split = new_split
+    }
     _parts := make([]Part, len(parts), ctx.allocator)
     for p, i in parts do _parts[i] = p
-    return { type, _parts, split, active_tab, {} }
+    return { get_uid(), type, _parts, split, active_tab, {} }
 }
 h :: proc(split: f32, top, bottom: Part) -> Layout { return layout(CTX, .H, top, bottom, split=split) }
 v :: proc(split: f32, left, right: Part) -> Layout { return layout(CTX, .V, left, right, split=split) }
 t :: proc(tabs: ..Part, active_tab := 0) -> Layout { return layout(CTX, .T, ..tabs, active_tab=active_tab) }
+
+UI__UID_COUNTER := i32(1)
+get_uid :: proc() -> i32 {
+    UI__UID_COUNTER += 1
+    return UI__UID_COUNTER
+}
