@@ -86,7 +86,10 @@ set_layout :: proc(layout: Layout) { CTX.layout = layout }
 set_measure_text_w :: proc(fn: proc(text: string, font_size: f32) -> f32) { CTX.measure_text_w = fn }
 set_measure_text_h :: proc(fn: proc(text: string, font_size: f32) -> f32) { CTX.measure_text_h = fn }
 
-get_hover :: proc() -> HoverType { return CTX.hovering_over }
+get_hover :: proc(try_to_reset := false) -> HoverType {
+    defer if try_to_reset && should_reset_hover() do reset_hover()
+    return CTX.hovering_over
+}
 should_reset_hover :: proc() -> bool { return !CTX.is_moving_dragbar }
 reset_hover :: proc() { CTX.hovering_over = .NONE }
 

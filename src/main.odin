@@ -6,19 +6,38 @@ import "core:math"
 import "core:mem"
 import "core:strings"
 import "ui"
-import rl "vendor:raylib"
+import sdl "vendor:sdl3"
+import ttf "vendor:sdl3/ttf"
 
 DOMO_VERSION :: #config(DOMO_VERSION, "N/A")
 
 FONT_RAW := #load("./resources/iosevka.ttf", string)
 FONT_SIZE : f32 : 30
-FONT : rl.Font
+FONT : ^ttf.Font
 
-COLOR_BG :: rl.Color { 20, 20, 20, 255 }
-COLOR_FG :: rl.Color { 200, 200, 200, 255 }
+COLOR_BG :: sdl.Color { 20, 20, 20, 255 }
+COLOR_FG :: sdl.Color { 200, 200, 200, 255 }
 
 WIDTH  : i32 = 800
 HEIGHT : i32 = 600
+
+DONE := false
+
+measure_text :: proc(text: string, font_size: f32) -> f32 {
+    // old_fs := ttf.GetFontSize(FONT)
+    // defer { ok := ttf.SetFontSize(FONT, old_fs) }
+    // ok := ttf.SetFontSize(FONT, font_size)
+    // measured_width : i32 = 0
+    // measured_length : uint = 0
+    // ok := ttf.MeasureString(FONT,
+    //     strings.clone_to_cstring(text), len(text),
+    //     0, // unbounded width
+    //     &measured_width,
+    //     &measured_length
+    // )
+    // return f32(measured_width)
+    return f32(len(text)) * font_size
+}
 
 main :: proc() {
     when ODIN_DEBUG {
@@ -44,12 +63,8 @@ main :: proc() {
     defer ui.free_context()
 
     // Provide procedures for measuring text
-    ui.set_measure_text_w(proc(text: string, font_size: f32) -> f32 {
-        return rl.MeasureTextEx(FONT, strings.unsafe_string_to_cstring(text), font_size, 0).x
-    })
-    ui.set_measure_text_h(proc(text: string, font_size: f32) -> f32 {
-        return rl.MeasureTextEx(FONT, strings.unsafe_string_to_cstring(text), font_size, 0).y
-    })
+    ui.set_measure_text_w(proc(text: string, font_size: f32) -> f32 { return measure_text(text, font_size) })
+    ui.set_measure_text_h(proc(text: string, font_size: f32) -> f32 { return FONT_SIZE })
 
     // Set the layout to render
     // h(SPLIT, LEFT, RIGHT) // SPLIT is 0.0 .. 1.0; LEFT, RIGHT are either `string` or h/v/t
@@ -67,52 +82,62 @@ main :: proc() {
                 ui.t("Watch", "Locals", "Registers", "Data"))))
 
 
+    // SDL3-specific
+    assert(sdl.Init(sdl.INIT_VIDEO))
+    window := sdl.CreateWindow("FLOAT", 640, 480, { .RESIZABLE })
+    assert(window != nil)
+    surface := sdl.GetWindowSurface(window)
+    assert(surface != nil)
+    renderer := sdl.CreateSoftwareRenderer(surface)
+    assert(renderer != nil)
 
-    // Raylib-specific
-    rl.SetConfigFlags({ .WINDOW_RESIZABLE })
-    rl.InitWindow(WIDTH, HEIGHT, "FLOAT")
-    defer rl.CloseWindow()
-    rl.SetTargetFPS(rl.GetMonitorRefreshRate(rl.GetCurrentMonitor()))
-    { // load the iosevka font
-        FONT = rl.LoadFontFromMemory(
-            ".ttf",
-            raw_data(FONT_RAW[:]),
-            i32(len(FONT_RAW)),
-            i32(FONT_SIZE),
-            raw_data(CODEPOINTS[:]),
-            len(CODEPOINTS),
-        )
-        rl.GenTextureMipmaps(&FONT.texture)
-        rl.SetTextureFilter(FONT.texture, .BILINEAR)
+    { // Fonts...
+        assert(ttf.Init())
+        stream := sdl.IOFromMem(raw_data(FONT_RAW), len(FONT_RAW))
+        assert(stream != nil)
+        FONT := ttf.OpenFontIO(stream, true, FONT_SIZE)
+        assert(FONT != nil)
+        // FONT := ttf.OpenFont("iosevka", FONT_SIZE)
+        // if FONT == nil do log.error(sdl.GetError())
+        // assert(FONT != nil)
     }
-    defer rl.UnloadFont(FONT)
 
-    for !rl.WindowShouldClose() {
-        WIDTH  = rl.GetScreenWidth()
-        HEIGHT = rl.GetScreenHeight()
-
-        // Raylib-specific
-        rl.BeginDrawing()
-        defer rl.EndDrawing()
-        when ODIN_DEBUG {
-            rl.ClearBackground({255,0,255,255})
-        } else {
-            rl.ClearBackground({0,0,0,255})
+    for !DONE {
+        e : sdl.Event
+        for sdl.PollEvent(&e) {
+            #partial switch e.type {
+            case .QUIT: DONE = true
+            case .KEY_DOWN: if e.key.key == sdl.K_ESCAPE do DONE = true
+            case .WINDOW_RESIZED:
+                sdl.DestroySurface(surface)
+                surface = sdl.GetWindowSurface(window)
+                sdl.DestroyRenderer(renderer)
+                renderer = sdl.CreateSoftwareRenderer(surface)
+            case .MOUSE_WHEEL: ui.update_mouse_wheel(i32(e.wheel.x), i32(e.wheel.y))
+            case .MOUSE_MOTION: ui.update_mouse_position(i32(e.motion.x), i32(e.motion.y))
+            case .MOUSE_BUTTON_DOWN: if e.button.which == 0 do ui.update_mouse_button_state(.LEFT, .DOWN)
+            case .MOUSE_BUTTON_UP:   if e.button.which == 0 do ui.update_mouse_button_state(.LEFT, .UP)
+            }
         }
+
+        vp : sdl.Rect
+        sdl.GetRenderViewport(renderer, &vp)
+        WIDTH, HEIGHT = vp.w, vp.h
+
+        when ODIN_DEBUG {
+            sdl.SetRenderDrawColor(renderer, 0xFF, 0x0, 0xFF, 0xFF)
+        } else {
+            sdl.SetRenderDrawColor(renderer, 0, 0, 0, 0xFF)
+        }
+        sdl.RenderClear(renderer)
 
         // Change the cursor style
-        switch ui.get_hover() {
-        case .BUTTON: rl.SetMouseCursor(.POINTING_HAND)
-        case .DRAGBAR_H: rl.SetMouseCursor(.RESIZE_EW)
-        case .DRAGBAR_V: rl.SetMouseCursor(.RESIZE_NS)
-        case .NONE: rl.SetMouseCursor(.DEFAULT)
+        switch ui.get_hover(true) {
+        case .BUTTON:    assert(sdl.SetCursor(sdl.CreateSystemCursor(.POINTER)))
+        case .DRAGBAR_H: assert(sdl.SetCursor(sdl.CreateSystemCursor(.EW_RESIZE)))
+        case .DRAGBAR_V: assert(sdl.SetCursor(sdl.CreateSystemCursor(.NS_RESIZE)))
+        case .NONE:      assert(sdl.SetCursor(sdl.CreateSystemCursor(.DEFAULT)))
         }
-        if ui.should_reset_hover() do ui.reset_hover()
-
-        // Update mouse info
-        ui.update_mouse_position(i32(rl.GetMousePosition().x), i32(rl.GetMousePosition().y))
-        ui.update_mouse_button_state(.LEFT, rl.IsMouseButtonDown(.LEFT) ? .DOWN : .UP)
-        ui.update_mouse_wheel(i32(rl.GetMouseWheelMoveV().x), i32(rl.GetMouseWheelMoveV().y))
 
         // Render the layout
         ui.render(WIDTH, HEIGHT, FONT_SIZE)
@@ -125,16 +150,42 @@ main :: proc() {
             case .WINDOW:
                 // Decide how to render each window yourself,
                 // this draws the title in the center of the window
-                rl.DrawRectangle(c.x,c.y,c.w,c.h, COLOR_BG)
-                t := rl.MeasureText(strings.unsafe_string_to_cstring(c.title), i32(FONT_SIZE))
-                rl.DrawText(strings.unsafe_string_to_cstring(c.title), c.x+c.w/2-t/2, c.y+c.h/2-i32(FONT_SIZE)/2, i32(FONT_SIZE), COLOR_FG)
-            case .RECT: rl.DrawRectangle(c.x,c.y,c.w,c.h, rl.Color(c.color))
-            case .TEXT: rl.DrawTextEx(FONT, strings.unsafe_string_to_cstring(c.text), {f32(c.x),f32(c.y)}, c.font_size, 0, rl.Color(c.color))
-            case .SCISSOR_ON: rl.BeginScissorMode(c.x,c.y,c.w,c.h)
-            case .SCISSOR_OFF: rl.EndScissorMode()
-            }
-        }
+                sdl.SetRenderDrawColor(renderer, COLOR_BG.r,COLOR_BG.g,COLOR_BG.b,COLOR_BG.a)
+                sdl.RenderFillRect(renderer, &sdl.FRect{ f32(c.x), f32(c.y), f32(c.w), f32(c.h) })
 
-        rl.DrawFPS(0, 0)
+                t := measure_text(c.title, FONT_SIZE)
+                sdl.SetRenderDrawColor(renderer, COLOR_FG.r,COLOR_FG.g,COLOR_FG.b,COLOR_FG.a)
+                cstr := strings.clone_to_cstring(c.title); defer delete(cstr)
+                sdl.RenderDebugText(renderer, f32(c.x+c.w/2)-t/2, f32(c.y+c.h/2)-FONT_SIZE/2, cstr)
+            case .RECT:
+                sdl.SetRenderDrawColor(renderer, c.color.r,c.color.g,c.color.b,c.color.a)
+                sdl.RenderFillRect(renderer, &sdl.FRect{ f32(c.x), f32(c.y), f32(c.w), f32(c.h) })
+            case .TEXT:
+                sdl.SetRenderDrawColor(renderer, c.color.r,c.color.g,c.color.b,c.color.a)
+                cstr := strings.clone_to_cstring(c.text); defer delete(cstr)
+                sdl.RenderDebugText(renderer, f32(c.x), f32(c.y), cstr)
+            case .SCISSOR_ON: sdl.SetRenderClipRect(renderer, &sdl.Rect{c.x,c.y,c.w,c.h})
+            case .SCISSOR_OFF: sdl.SetRenderClipRect(renderer, &sdl.Rect{0,0,1<<16,1<<16})
+            }
+            sdl.RenderPresent(renderer)
+        }
+        sdl.UpdateWindowSurface(window)
     }
+
+    sdl.Quit()
+
+    // defer rl.CloseWindow()
+    // rl.SetTargetFPS(rl.GetMonitorRefreshRate(rl.GetCurrentMonitor()))
+    // { // load the iosevka font
+    //     FONT = rl.LoadFontFromMemory(
+    //         ".ttf",
+    //         raw_data(FONT_RAW[:]),
+    //         i32(len(FONT_RAW)),
+    //         i32(FONT_SIZE),
+    //         raw_data(CODEPOINTS[:]),
+    //         len(CODEPOINTS),
+    //     )
+    //     rl.GenTextureMipmaps(&FONT.texture)
+    //     rl.SetTextureFilter(FONT.texture, .BILINEAR)
+    // }
 }
